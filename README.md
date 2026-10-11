@@ -1,7 +1,7 @@
 # LMS Backend · Nhóm 2
 
-Khung S1: Express + TypeScript, PostgreSQL; hai endpoint hạ tầng để kiểm tra FE–BE–DB.
-Module nghiệp vụ bắt đầu sau CP1. Long phụ trách S1/D1/B1/B2/B6 và tích hợp; Nam làm
+S1 + D1 local: Express + TypeScript, PostgreSQL; endpoint hạ tầng và schema/seed nháp.
+Module API nghiệp vụ bắt đầu sau CP1. Long phụ trách S1/D1/B1/B2/B6 và tích hợp; Nam làm
 D2/B3/B4/B5. Nam review backend của Long; Long review backend của Nam.
 
 ## Chạy local
@@ -43,14 +43,23 @@ Invoke-RestMethod http://localhost:3000/api/ready
 ```powershell
 npm run check
 npm run db:check
+npm run db:migrate
+npm run db:test
 npm run build
 npm start
 ```
 
-`check` chạy ESLint, TypeScript, test HTTP và build. `db:check` chạy `SELECT 1` trên DB thật.
-GitHub Actions chạy các lệnh này, thêm PostgreSQL service và smoke test API đã build
+`check` chạy ESLint, TypeScript, test HTTP/password và build. `db:check` chạy SELECT 1.
+`db:migrate` áp dụng SQL có phiên bản trên DATABASE_URL; `db:test` dùng DB local tạm,
+không reset DB dự án. GitHub Actions kiểm tra migration, DB và smoke test API đã build
 khi mở PR hoặc push lên `main`. Workflow đã được chuẩn bị local; cần push/PR để có
 kết quả CI trên GitHub. Có `package-lock.json`; thành viên dùng `npm ci`.
+
+Để có dữ liệu mẫu local: chạy `db:migrate`, đặt SEED_PASSWORD (tối thiểu 12 ký tự)
+trong `.env`, rồi `npm run db:seed`. Seed giữ dòng và mật khẩu cũ khi chạy lại;
+chỉ chạy local. Mã tài khoản ADMIN001/GV001/GV002/SV001/SV002/SV003; API đăng nhập
+sẽ được viết ở B1. File metadata fixture chưa có object S3 thật.
+Xem [hướng dẫn migration/seed](database/migrations/README.md).
 
 ## Cấu trúc
 
@@ -61,8 +70,11 @@ src/
   config/env.ts         # Đọc và kiểm tra cấu hình
   database/pool.ts      # PostgreSQL connection pool
   modules/              # Module nghiệp vụ theo D1/D2
-database/migrations/    # Schema/migration sẽ làm ở D1
+database/migrations/    # Migration SQL có phiên bản, D1 nháp trước CP1
 scripts/check-database.ts
+scripts/migrate.ts      # Runner pg: transaction, checksum, advisory lock
+scripts/seed.ts         # Dữ liệu mẫu chỉ cho local
+scripts/test-database.ts # Kiểm thử trên DB tạm
 tests/app.test.ts
 docs/                   # Quyết định kỹ thuật, checklist và câu hỏi kickoff
 ```
@@ -77,6 +89,7 @@ docs/                   # Quyết định kỹ thuật, checklist và câu hỏi
 | `DATABASE_URL` | URL PostgreSQL; chỉ cấu hình ở backend |
 | `DATABASE_SSL` | `false` cho Docker local; `true` nếu nhà cung cấp yêu cầu TLS với chứng chỉ hợp lệ |
 | `POSTGRES_*` | Cấu hình Docker local; `POSTGRES_PORT` cần khớp cổng trong `DATABASE_URL` |
+| `SEED_PASSWORD` | Mật khẩu local của tài khoản mới tạo qua db:seed; không ghi vào Git |
 
 Không đưa password/token/`.env` vào PR. CORS chỉ kiểm soát trình duyệt; endpoint nghiệp
 vụ còn phải có auth, kiểm tra role và quyền trong lớp ở B1/B3/B4. Frontend không được
@@ -101,6 +114,12 @@ Dừng DB bằng `docker compose stop`; tiếp tục bằng `docker compose up -
 - [Quyết định kỹ thuật](docs/technical-decisions.md)
 - [Checklist chuẩn bị và S1](docs/S1-checklist.md)
 - [Câu hỏi kickoff/CP1/CP2](docs/kickoff-questions.md)
+- [D1: thiết kế database nháp](docs/database-design.md)
+- ERD: [nguồn Mermaid](database/diagrams/lms-erd.mmd) · [sơ đồ SVG](database/diagrams/lms-erd.svg) · [chú thích](docs/database-erd.md)
+- [D1: quyết định cần chốt](docs/D1-decisions.md)
+- [D1: checklist và bàn giao](docs/D1-checklist.md)
+- [D1: kết quả kiểm tra](docs/verification-D1.md)
+- [Hướng dẫn migration/seed](database/migrations/README.md)
 - [Hướng dẫn chia module](src/modules/README.md)
 
 Branch: `S1-mo-ta-ngan`; commit: `[S1] ...`; PR: `Closes #<issue>`.

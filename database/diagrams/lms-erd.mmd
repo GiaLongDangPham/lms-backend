@@ -1,0 +1,139 @@
+%% LMS D1 - 0001_initial_schema.sql; business review pending CP1/CP2
+%% Main fields only; audit fields and constraints are documented in SQL.
+erDiagram
+    USERS {
+        uuid id PK
+        text school_code UK
+        text full_name
+        text email "NULL; contact only"
+        text password_hash
+        text role
+        boolean is_active
+    }
+    CLASSES {
+        uuid id PK
+        text code
+        text name
+        text term
+        uuid created_by FK
+    }
+    CLASS_TEACHERS {
+        uuid class_id PK, FK
+        uuid teacher_id PK, FK
+        uuid assigned_by FK
+    }
+    ENROLLMENTS {
+        uuid id PK
+        uuid class_id FK
+        uuid student_id FK
+        uuid enrolled_by FK
+        boolean is_active
+    }
+    MATERIALS {
+        uuid id PK
+        uuid class_id FK
+        uuid created_by FK
+        text title
+        text description
+    }
+    ASSIGNMENTS {
+        uuid id PK
+        uuid class_id FK
+        uuid created_by FK
+        text title
+        timestamptz deadline_at
+        numeric max_score
+    }
+    SUBMISSIONS {
+        uuid id PK
+        uuid assignment_id FK
+        uuid enrollment_id FK
+        timestamptz created_at
+    }
+    SUBMISSION_VERSIONS {
+        uuid submission_id PK, FK
+        integer version_number PK
+        timestamptz submitted_at
+        timestamptz deadline_at_submission
+    }
+    GRADES {
+        uuid submission_id PK, FK
+        integer graded_version_number FK
+        numeric score
+        text feedback
+        text status
+        uuid graded_by FK
+        uuid published_by FK
+        timestamptz published_at
+    }
+    FILES {
+        uuid id PK
+        text storage_provider
+        text storage_container
+        text object_key
+        text original_name
+        text mime_type
+        bigint size_bytes
+        uuid uploaded_by FK
+    }
+    MATERIAL_FILES {
+        uuid material_id PK, FK
+        uuid file_id PK, FK
+    }
+    ASSIGNMENT_FILES {
+        uuid assignment_id PK, FK
+        uuid file_id PK, FK
+    }
+    SUBMISSION_FILES {
+        uuid submission_id PK, FK
+        integer version_number PK, FK
+        uuid file_id PK, FK
+    }
+    NOTIFICATIONS {
+        uuid id PK
+        uuid recipient_id FK
+        uuid assignment_id FK
+        text kind
+        text title
+        text body
+        text deduplication_key
+        timestamptz read_at
+    }
+    COMMENTS {
+        uuid id PK
+        uuid author_id FK
+        uuid assignment_id FK
+        uuid submission_id FK
+        text body
+    }
+
+    USERS ||..o{ CLASSES : creates
+    USERS ||--o{ CLASS_TEACHERS : teaches
+    USERS ||..o{ CLASS_TEACHERS : assigns
+    CLASSES ||--o{ CLASS_TEACHERS : has_teachers
+    USERS ||..o{ ENROLLMENTS : enrolls_as_student
+    USERS ||..o{ ENROLLMENTS : records_enrollment
+    CLASSES ||..o{ ENROLLMENTS : has_students
+    CLASSES ||..o{ MATERIALS : contains
+    USERS ||..o{ MATERIALS : authors
+    CLASSES ||..o{ ASSIGNMENTS : contains
+    USERS ||..o{ ASSIGNMENTS : authors
+    ASSIGNMENTS ||..o{ SUBMISSIONS : receives
+    ENROLLMENTS ||..o{ SUBMISSIONS : owns
+    SUBMISSIONS ||--o{ SUBMISSION_VERSIONS : retains_history
+    SUBMISSIONS ||--o| GRADES : has_current_result
+    SUBMISSION_VERSIONS ||..o| GRADES : is_graded
+    USERS ||..o{ GRADES : grades
+    USERS |o..o{ GRADES : publishes
+    USERS ||..o{ FILES : uploads
+    MATERIALS ||--o{ MATERIAL_FILES : attaches
+    FILES ||--o{ MATERIAL_FILES : referenced_by
+    ASSIGNMENTS ||--o{ ASSIGNMENT_FILES : attaches
+    FILES ||--o{ ASSIGNMENT_FILES : referenced_by
+    SUBMISSION_VERSIONS ||--o{ SUBMISSION_FILES : attaches
+    FILES ||--o{ SUBMISSION_FILES : referenced_by
+    USERS ||..o{ NOTIFICATIONS : receives
+    ASSIGNMENTS |o..o{ NOTIFICATIONS : relates_to
+    USERS ||..o{ COMMENTS : writes
+    ASSIGNMENTS |o..o{ COMMENTS : discussed_in
+    SUBMISSIONS |o..o{ COMMENTS : discussed_in

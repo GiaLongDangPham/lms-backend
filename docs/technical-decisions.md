@@ -20,13 +20,15 @@ chạy ở kickoff; Long đã chọn stack cho phần chuẩn bị kỹ thuật.
   này khi thiết lập máy của từng thành viên. Máy Long hiện có Node 22.17.0.
 - npm + lockfile ở mỗi repo; dùng `npm ci` để cài lại đúng dependency.
 - Express ESM; TypeScript strict; tách app/server, controller/service/repository theo module.
-- Dùng driver `pg` cho kết nối hạ tầng. Chưa chốt ORM hay schema; cách migration sẽ
-  được quyết định ở D1, cần Nam thống nhất trước triển khai nghiệp vụ.
+- Dùng driver `pg`. Ngày 11/10 Long chốt migration SQL có phiên bản dùng pg, UUID
+  cho khóa đơn và mã trường để đăng nhập. Có schema/seed D1 local, chưa duyệt CP1;
+  Nam cần đồng bộ ID/trường với D2 trước triển khai nghiệp vụ.
 - PostgreSQL 17 local qua Docker Compose, volume bền vững; hoặc PostgreSQL có sẵn.
 - Local: FE `http://localhost:5173`; BE `http://localhost:3000/api`; DB cổng host 15432
   (container 5432). Cổng 5432 không bind được trong lần thử trên máy Long ngày 11/10.
 - CORS dùng allowlist origin. Health kiểm tra process; readiness kiểm tra DB bằng `SELECT 1`.
-- ESLint, typecheck, Vitest, build; CI BE có PostgreSQL và smoke test API đã build.
+- ESLint, typecheck, Vitest, build; CI BE có PostgreSQL, migration, db:test và smoke
+  test API đã build. CI trên GitHub cần được xác minh sau khi push/PR.
 
 ## Hợp đồng hạ tầng hiện có
 
