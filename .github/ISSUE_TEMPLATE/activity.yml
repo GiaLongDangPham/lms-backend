@@ -1,0 +1,36 @@
+name: Hoạt động baseline
+description: Theo dõi một mã hoạt động với đầu ra và DoD.
+title: "[Mã] Tên hoạt động"
+body:
+  - type: input
+    id: code
+    attributes:
+      label: Mã hoạt động
+      placeholder: S1, D1, B1...
+    validations:
+      required: true
+  - type: textarea
+    id: plan
+    attributes:
+      label: Phụ trách, lịch và giờ baseline
+      placeholder: Long; 12–13/10; 8 giờ. Reviewer Nam.
+    validations:
+      required: true
+  - type: textarea
+    id: tasks
+    attributes:
+      label: Chia việc và đầu ra
+      description: Chia các bước ngay ngày bắt đầu; không tạo mã baseline mới tùy ý.
+  - type: textarea
+    id: done
+    attributes:
+      label: Definition of Done
+      description: Chép tiêu chí baseline, thêm checkbox và bằng chứng kiểm tra.
+      placeholder: "- [ ] Staging chạy và FE gọi BE được."
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Bằng chứng, bàn giao và vướng mắc
+      description: Link PR, CI, staging, kết quả test và người nhận bàn giao.
