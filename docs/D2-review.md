@@ -4,7 +4,7 @@
 
 ## Current situation and recommendation
 
-`main` contains only the S1 health/readiness endpoints. The unmerged `origin/D1-setup-database` branch contains migration `0001`, a seed, and draft business decisions. `LMS Project.pdf`, Client Log #1–12 (pages 2–3), confirms the required actors and flows but does not specify endpoint shapes or the edge rules listed below.
+`main` contains only the S1 health/readiness endpoints. D1 was merged into `develop` through PR #1; this D2 branch now includes its migration `0001`, seed, and draft business decisions for direct reconciliation. `LMS Project.pdf`, Client Log #1–12 (pages 2–3), confirms the required actors and flows but does not specify endpoint shapes or the edge rules listed below.
 
 The draft uses resource paths under `/api`, UUID IDs, camelCase JSON, ISO 8601 UTC responses, the existing error envelope, cursor pagination, and one class/resource authorization check per operation. A provisional bearer contract keeps the frontend mock concrete; Long, Nam, and Khang must confirm bearer versus server session at CP1 before B1 implementation. `GET /api/health` and `GET /api/ready` remain the existing S1 contract and are not redefined as business endpoints here.
 
@@ -20,7 +20,7 @@ One combined spec drives the mock. The alternatives were separate endpoint lists
 | `Grade` / `PublishedGrade` | `grades` | Teacher-only grade points to an explicit submission version. The student route uses a separate Published-only schema; submission lists/details contain no grade fields. |
 | `Notification`, `Comment` | `notifications`, `comments` | Notifications are recipient-scoped and contain no Draft grade details. Comments target exactly one assignment or submission. |
 
-The spec follows D1's current table shapes but does not approve D1's proposed Q04–Q10 business rules. In particular, `isLate` is a derived value from `submittedAt` and `deadlineAtSubmission`; D1 does not store a separate Late column. The backend must set server timestamps and commit each version plus file links atomically. The D1 branch is not merged into `main`, so schema names and constraints need a final CP1 comparison.
+The spec follows the D1 table shapes now present on this branch but does not approve D1's proposed Q04–Q10 business rules. In particular, `isLate` is a derived value from `submittedAt` and `deadlineAtSubmission`; D1 does not store a separate Late column. The backend must set server timestamps and commit each version plus file links atomically. D1 is merged into `develop`, not `main`; schema names and constraints still need final CP1 approval.
 
 ## Mock and validation
 
