@@ -1,6 +1,9 @@
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
+import console from 'node:console';
+import process from 'node:process';
+import { URL } from 'node:url';
 
 const spec = JSON.parse(readFileSync(new URL('../docs/openapi.json', import.meta.url), 'utf8'));
 const methods = new Set(['get', 'post', 'put', 'patch', 'delete']);
@@ -67,7 +70,7 @@ function validate() {
       operations++;
     }
   }
-  for (const [name, schema] of Object.entries(spec.components.schemas)) exampleFor(schema);
+  for (const schema of Object.values(spec.components.schemas)) exampleFor(schema);
   return operations;
 }
 
