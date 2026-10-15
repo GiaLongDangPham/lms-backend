@@ -121,6 +121,7 @@ Dừng DB bằng `docker compose stop`; tiếp tục bằng `docker compose up -
 - [D1: kết quả kiểm tra](docs/verification-D1.md)
 - [Hướng dẫn migration/seed](database/migrations/README.md)
 - [Hướng dẫn chia module](src/modules/README.md)
+- [D2: OpenAPI draft, mock và các quyết định chờ duyệt](docs/D2-review.md)
 
 Branch: `S1-mo-ta-ngan`; commit: `[S1] ...`; PR: `Closes #<issue>`.
 Chỉ đóng S1 khi staging chạy, FE gọi BE và cả nhóm chạy local được theo README.
