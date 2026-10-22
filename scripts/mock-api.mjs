@@ -92,11 +92,18 @@ if (process.argv.includes('--self-test')) {
   const submission = exampleFor(resolve(submissionRoute.item.get.responses['200']).content['application/json'].schema);
   assert.equal(submission.versions.length, 2);
   assert.equal(submission.currentVersionNumber, 2);
+  assert.equal(submission.canSubmit, false);
+  assert.equal(submission.lockedReason, 'GRADED');
   assert.equal(Object.hasOwn(submission, 'score'), false);
-  const result = exampleFor(resolve(spec.paths['/submissions/{submissionId}/my-result'].get.responses['200']).content['application/json'].schema);
+  const result = exampleFor(resolve(spec.paths['/assignments/{assignmentId}/my-result'].get.responses['200']).content['application/json'].schema);
   assert.equal(result.status, 'PUBLISHED');
+  assert.equal(result.source, 'MANUAL');
   const draft = exampleFor(resolve(spec.paths['/submissions/{submissionId}/grade'].get.responses['200']).content['application/json'].schema);
   assert.equal(draft.status, 'DRAFT');
+  const publication = exampleFor(resolve(spec.paths['/assignments/{assignmentId}/grades/publish'].post.responses['200']).content['application/json'].schema);
+  assert.equal(publication.publishedCount, 32);
+  assert.equal(publication.automaticZeroCount, 4);
+  assert.equal(spec.paths['/submissions/{submissionId}/grade/publish'], undefined);
   const comment = exampleFor(resolve(spec.paths['/submissions/{submissionId}/comments'].post.responses['201']).content['application/json'].schema);
   assert.equal(comment.assignmentId, null);
   assert.ok(comment.submissionId);
@@ -117,14 +124,17 @@ if (process.argv.includes('--self-test')) {
   assert.equal(studentSubmission.status, 200);
   assert.equal(JSON.parse(studentSubmission.body).versions.length, 2);
   assert.equal(Object.hasOwn(JSON.parse(studentSubmission.body), 'score'), false);
-  const studentResult = send('GET', '/api/submissions/60000000-0000-4000-8000-000000000002/my-result');
+  const studentResult = send('GET', '/api/assignments/50000000-0000-4000-8000-000000000001/my-result');
   assert.equal(JSON.parse(studentResult.body).status, 'PUBLISHED');
   assert.equal(send('POST', '/api/assignments/50000000-0000-4000-8000-000000000001/submissions', { 'x-mock-status': '409' }).status, 409);
+  const blockedPublication = send('POST', '/api/assignments/50000000-0000-4000-8000-000000000001/grades/publish', { 'x-mock-status': '409' });
+  assert.equal(blockedPublication.status, 409);
+  assert.equal(JSON.parse(blockedPublication.body).error.code, 'UNGRADED_SUBMISSIONS');
   const discovery = send('GET', '/api');
   assert.equal(discovery.status, 200);
   assert.equal(JSON.parse(discovery.body).openapi, '/api/openapi.json');
   assert.equal(send('GET', '/api/missing').status, 404);
-  console.log('Mock self-test passed: discovery, HTTP dispatch, version history, Draft separation, publication example, error response and submission comment target.');
+  console.log('Mock self-test passed: discovery, HTTP dispatch, submission lock, Draft separation, assignment-wide publication, automatic-zero summary, publication blocker and comment target.');
   process.exit(0);
 }
 
