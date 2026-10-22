@@ -2,7 +2,8 @@ import { createApp } from './app.js';
 import { env } from './config/env.js';
 import { checkDatabase, pool } from './database/pool.js';
 
-const app = createApp({ corsOrigins: env.corsOrigins, checkDatabase });
+const app = createApp({ corsOrigins: env.corsOrigins, checkDatabase,
+  business: { pool, auth: { ...env.auth, origins: env.authOrigins } } });
 const server = app.listen(env.port, env.host, () => {
   console.info(`LMS API listening on http://${env.host}:${env.port}`);
 });

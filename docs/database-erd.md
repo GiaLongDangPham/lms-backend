@@ -1,21 +1,22 @@
-# D1 · ERD nháp để review
+# D1 · ERD cập nhật theo nghiệp vụ 17/10
 
-**Draft ngày 11/10/2026**, dựa trên yêu cầu trong PDF; chưa đối chiếu prototype R1
-và OpenAPI D2. Xem [từ điển dữ liệu](database-design.md) và
-[các quyết định cần chốt](D1-decisions.md) khi review nghiệp vụ.
+Đối chiếu migration 0001–0003, D2 commit 532f983 và Client Log 18–20/L04/L05/L14/L20.
+Có 16 bảng nghiệp vụ và 2 bảng auth; không vẽ bảng quản lý migration.
+Xem [từ điển dữ liệu](database-design.md) và [quyết định](D1-decisions.md).
 
 PK = khóa chính; FK = khóa ngoại; UK = khóa duy nhất. UUID đã được Long chốt Q02.
-Migration `0001` triển khai cấu trúc này cho local; nghiệp vụ vẫn cần CP1/CP2 review.
+Migration `0003` bổ sung nghiệp vụ mới và giữ dữ liệu đã có từ 0001/0002.
 ERD thể hiện cột chính và cardinality, không liệt kê toàn bộ audit fields/index.
 Đường liền biểu thị quan hệ định danh, nét đứt biểu thị quan hệ không định danh;
 cú pháp theo [tài liệu Mermaid ERD](https://mermaid.js.org/syntax/entityRelationshipDiagram.html).
 
-Sơ đồ chỉnh sửa: [lms-erd.mmd](../database/diagrams/lms-erd.mmd).
+Nguồn PlantUML để paste vào editor: [lms-erd.puml](../database/diagrams/lms-erd.puml).
+Nguồn Mermaid: [lms-erd.mmd](../database/diagrams/lms-erd.mmd).
 Bản xem/phóng to: [lms-erd.svg](../database/diagrams/lms-erd.svg).
 
-Mở https://mermaid.live và dán nội dung file này vào ô Code để xem/chỉnh sửa.
-File `.mmd` là nguồn sơ đồ; không duy trì bản Mermaid trùng lặp trong Markdown.
-Khi sửa nguồn, xuất lại SVG từ Mermaid Live để hai bản khớp nhau.
+Paste `.mmd` vào https://mermaid.live hoặc `.puml` vào editor PlantUML/draw.io có
+hỗ trợ PlantUML. SVG được render local từ `.puml`; khi đổi schema cập nhật cả hai
+nguồn và render lại SVG, không duy trì một bản code diagram nữa trong Markdown.
 
 ## Đọc phần nộp bài và điểm
 
@@ -26,11 +27,18 @@ submission S (assignment X + enrollment của SV A)
 ├── version 1 → file F1, F2
 └── version 2 → file F3          ← bản hiện hành
 
-grade của S → ghi rõ chấm version 1 hay 2
+grade (assignment X + enrollment SV A) → version được chấm
+├── revision 1: Draft 8
+├── revision 2: Published 8
+└── revision 3: Published 9     ← kết quả hiện tại
+
+SV B không nộp: grade (X + enrollment B) → 0 Published
+submission_id = NULL; version = NULL; source = AUTO_ZERO_NO_SUBMISSION
 ```
 
-Một Grade hiện tại/hồ sơ phù hợp yêu cầu không bắt buộc lịch sử mọi lần sửa điểm.
-Giữ điểm thế nào nếu SV nộp lại sau chấm/công bố là Q06, không tự suy ra từ ERD.
+Một Grade hiện tại/bài tập/ghi danh, nhiều snapshot lịch sử bất biến. Có grade thì
+khóa nộp lại. SV chỉ xem snapshot Published. Sửa 0 tự động chuyển nguồn hiện tại
+MANUAL, vẫn không tạo bài nộp; snapshot cũ giữ nguyên nguồn tự động.
 
 ## Ràng buộc không được bỏ sót khi chuyển thành SQL
 
@@ -43,3 +51,9 @@ Giữ điểm thế nào nếu SV nộp lại sau chấm/công bố là Q06, kh�
 7. Cardinality nhiều file không có nghĩa một object được phép chia sẻ giữa các chủ sở hữu;
    quy tắc riêng này chốt ở Q08 và thực thi bằng service/DB.
 8. Foreign key không thay thế kiểm tra role, quyền lớp và việc ẩn Grade Draft ở API.
+9. UNIQUE `(course_code, code, term)` ở classes, `(assignment_id, enrollment_id)` ở grades.
+10. Grade có thể không có submission/version; cả hai phải cùng NULL, chỉ Published
+    được phép không có bài nộp. AUTO_ZERO_NO_SUBMISSION bắt buộc score = 0.
+11. grade_history PK `(grade_id, version)`, cấm UPDATE/DELETE; trigger append snapshot.
+12. Khóa assignment dùng chung cho nộp/chấm/công bố; công bố atomic trong service.
+    DB chặn phiên bản mới nếu đã có grade hoặc assignment đã công bố.

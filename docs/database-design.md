@@ -1,11 +1,11 @@
-# D1 · Thiết kế database nháp
+# D1 · Thiết kế database
 
-Ngày chuẩn bị: 11/10/2026 · Long phụ trách · **Draft, chưa được duyệt tại CP1**.
+Ngày chuẩn bị: 11/10/2026 · Cập nhật: 17/10/2026 · Long phụ trách.
 
-Đây là đầu vào để Long/Nam đối chiếu DB với API D2. Migration `0001` và seed đã được
-triển khai, kiểm tra và áp dụng trên PostgreSQL local; schema vẫn là bản nháp trước
-CP1. Prototype R1 dự kiến ngày 12/10 và OpenAPI D2 chưa có trong repo tại thời điểm
-soạn; cần đối chiếu hai đầu vào này trước khi duyệt.
+Đã đối chiếu D2 commit 532f983 và Client Log 18–20/L04/L05/L14/L20. Migration `0003`
+cập nhật dữ liệu cũ từ 0001/0002; không sửa migration đã áp dụng. Các phần chưa chốt
+được ghi riêng trong [D1-decisions.md](D1-decisions.md), không coi toàn bộ schema là
+đã nghiệm thu chỉ vì các thay đổi này đã được triển khai.
 
 ## Căn cứ và mức độ chắc chắn
 
@@ -22,25 +22,28 @@ soạn; cần đối chiếu hai đầu vào này trước khi duyệt.
   deadline; cho nộp trễ; lưu lịch sử nộp; điểm/feedback chỉ hiển thị sau Publish.
 - **Đề xuất kỹ thuật:** tên bảng/cột, kiểu khóa, cấu trúc bảng phụ, ràng buộc và index
   bên dưới. Có thể sửa khi đối chiếu D2.
-- **Chưa chốt:** phần còn lại Q01 và Q04–Q10 trong [D1-decisions.md](D1-decisions.md).
+- **Đã chốt 17/10:** khóa nộp sau chấm; sửa Published giữ Published và lưu lịch sử;
+  công bố cả bài atomic, tự gán 0 không có submission; note từng version; mã học phần.
+- **Chưa chốt:** các phần còn mở trong [D1-decisions.md](D1-decisions.md).
   Bản nháp không tự bổ sung quy tắc nghiệp vụ đã được khách hàng duyệt.
 
 ## 1. Bảng thực thể — dữ liệu — quan hệ — câu hỏi
 
-Chín thực thể trong kế hoạch được triển khai thành **15 bảng đề xuất**. Các bảng
-phụ tách quan hệ nhiều–nhiều, phiên bản và file; không phải thêm module mới.
+Chín thực thể ban đầu được triển khai thành 15 bảng nghiệp vụ; thêm `grade_history`
+thành 16 bảng nghiệp vụ và hai bảng auth (18 bảng, không tính schema_migrations).
 
 | Thực thể / bảng | Dữ liệu cần lưu | Quan hệ chính | Điểm phải chốt |
 | --- | --- | --- | --- |
 | User → `users` | Mã trường, tên, email, hash mật khẩu, role, trạng thái hoạt động | GV được phân công; SV được ghi danh; người tạo/chấm/comment | Q01, Q04: trường đăng nhập, một hay nhiều role |
-| Class → `classes` | Mã lớp, tên lớp, học kỳ, người tạo, thời gian | Nhiều GV, nhiều SV, tài liệu, bài tập | Q04, Q10: mã lớp theo kỳ, lưu trữ/xóa |
+| Class → `classes` | Mã học phần, mã lớp, tên, học kỳ, mô tả, người tạo | Nhiều GV, nhiều SV, tài liệu, bài tập | L20: UNIQUE học phần/lớp/kỳ; archive còn mở |
 | Phân công → `class_teachers` | Lớp, GV, người phân công, thời gian | Bảng nối `classes`–`users` | Chỉ role TEACHER; mọi GV trong lớp quyền ngang nhau |
 | Enrollment → `enrollments` | Lớp, SV, trạng thái ghi danh, thời gian | Bảng nối lớp–SV; tham chiếu khi nộp bài | Q10: thôi học/ghi danh lại, quyền xem dữ liệu cũ |
 | Material → `materials` | Lớp, tiêu đề, mô tả, người tạo, thời gian | Thuộc lớp; nhiều file qua `material_files` | Q08: số lượng/loại file; Q10: xóa tài liệu |
 | Assignment → `assignments` | Lớp, tiêu đề, mô tả, deadline, điểm tối đa, người tạo | Nhiều bài nộp; file đề; thông báo | Q05, Q07: thang điểm và sửa deadline |
 | Submission → `submissions` | Bài tập, ghi danh của SV, thời gian tạo | Một hồ sơ/SV/bài; nhiều phiên bản; một kết quả điểm hiện tại | Q06: xử lý nộp lại sau chấm/công bố |
 | Phiên bản → `submission_versions` | Hồ sơ bài nộp, số phiên bản, giờ nộp, deadline lúc nộp | Nhiều file; Grade chỉ rõ phiên bản đã chấm | Q06–Q07: Late, hoàn tất upload, giữ lịch sử |
-| Grade → `grades` | Hồ sơ bài nộp, phiên bản được chấm, điểm, feedback, Draft/Published, GV chấm/công bố | Tối đa một kết quả hiện tại cho một hồ sơ bài nộp | Q05–Q06: sửa/công bố/thu hồi và nộp lại |
+| Grade → `grades` | Bài tập, ghi danh, bài nộp/version nullable, điểm, nguồn, revision, trạng thái | Một kết quả hiện tại/bài tập/ghi danh; nhiều grade_history | L04/L14: điểm không phụ thuộc có nộp bài |
+| `grade_history` | Snapshot score/feedback/status/source/submission/version/người/giờ | Nhiều snapshot bất biến/Grade | SV chỉ xem Published |
 | Notification → `notifications` | Người nhận, loại sự kiện, nội dung, bài tập liên quan, đã đọc, khóa chống trùng | Một dòng cho một người nhận | Q09: nhắc deadline và nội dung thông báo |
 | Comment → `comments` | Người viết, nội dung, đối tượng được bình luận, thời gian | Nhắm bài tập hoặc hồ sơ bài nộp | Q09: ai xem comment trên kết quả/bài nộp |
 | File → `files` | Nơi lưu, object key, tên gốc, MIME, dung lượng, người upload | Metadata dùng bởi bảng gắn file | Q08: giới hạn file và vòng đời file |
@@ -75,15 +78,15 @@ do frontend gửi. Các cột tùy chọn được ghi `NULL`; những cột kh�
 - `school_code text` — UNIQUE; mã SV/GV/Admin trong bộ dữ liệu giả lập.
 - `full_name text`, `email text NULL`, `password_hash text`.
 - `role text` — CHECK thuộc ADMIN/TEACHER/STUDENT; một role/tài khoản là đề xuất Q04.
-- `is_active boolean`; `created_at timestamptz`, `updated_at timestamptz`.
+- `is_active boolean`, `must_change_password boolean`; `created_at timestamptz`, `updated_at timestamptz`.
 - Mã trường là tên đăng nhập đã chốt Q01; trim + uppercase và UNIQUE. Email dùng
   liên hệ, hiện tùy chọn và không UNIQUE. Không trả password_hash qua API.
 
 ### `classes`
 
-- `id uuid` — PK; `code text`, `name text`, `term text`.
+- `id uuid` — PK; `course_code text`, `code text`, `name text`, `term text`, `description text NULL`.
 - `created_by uuid` — FK → users; `created_at`, `updated_at`.
-- Đề xuất UNIQUE `(code, term)`; Admin thực hiện tạo lớp. Q04 xác nhận quy tắc mã.
+- UNIQUE `(course_code, code, term)` theo L20; Admin tạo lớp; course_code chuẩn hóa uppercase.
 - Chưa thêm bảng môn học/phòng ban do chưa có yêu cầu phải quản lý riêng.
 
 ### `class_teachers`
@@ -112,6 +115,8 @@ do frontend gửi. Các cột tùy chọn được ghi `NULL`; những cột kh�
 
 - `id uuid` — PK; `class_id uuid` — FK → classes.
 - `title text`, `description text NULL`, `deadline_at timestamptz`, `max_score numeric`.
+- `results_published_at timestamptz NULL`: mốc công bố toàn bài, không được mở lại;
+  Published riêng lẻ có từ schema cũ không tự suy thành mốc toàn bài.
 - `created_by uuid` — FK → users; `created_at`, `updated_at`.
 - CHECK `max_score > 0`; chưa có default thang 10 hay 100 (Q05).
 - Không dùng trạng thái Draft/Published của Grade để suy ra trạng thái bài tập.
@@ -133,32 +138,53 @@ do frontend gửi. Các cột tùy chọn được ghi `NULL`; những cột kh�
 - `submission_id uuid` — FK → submissions; `version_number integer`.
 - PK `(submission_id, version_number)`; CHECK `version_number >= 1`.
 - `submitted_at timestamptz`; `deadline_at_submission timestamptz` là snapshot đề xuất Q07.
+- `note text NULL`, tối đa 2000 ký tự, riêng từng lần nộp; chỉ chủ bài và GV lớp đọc.
 - Bản hiện hành là số phiên bản lớn nhất đã hoàn tất transaction; không thêm
   `is_current` trên nhiều dòng hay con trỏ circular trong bản nháp.
 - Deadline snapshot là sự kiện lịch sử tại lúc nộp, khác deadline hiện tại của bài.
   Nếu Q07 chọn luôn tính theo deadline mới, bỏ snapshot trước migration.
 - Tạo phiên bản và gắn toàn bộ file trong cùng transaction; chỉ ghi bản hoàn tất.
-  Khi hai yêu cầu nộp cùng lúc, khóa dòng submissions trước khi cấp số phiên bản,
+  Khi hai yêu cầu nộp cùng lúc, khóa dòng assignment trước khi cấp số phiên bản,
   kết hợp PK để không trùng số. Không chỉ dùng `MAX + 1` mà không khóa/transaction.
 - Giữ nguyên file của bản cũ. Khái niệm Late và nộp lại sau deadline chờ CP2.
 
 ### `grades`
 
-- `submission_id uuid` — PK và FK → submissions: tối đa một kết quả hiện tại/hồ sơ.
-- `graded_version_number integer`; FK ghép `(submission_id, graded_version_number)`
+- `id uuid` — PK; `assignment_id uuid`, `enrollment_id uuid` — FK tương ứng,
+  UNIQUE cặp này, lớp của hai đối tượng phải trùng nhau.
+- `submission_id uuid NULL` — FK/UNIQUE → submissions, `graded_version_number integer NULL`;
+  cả hai cùng có hoặc cùng NULL; FK ghép `(submission_id, graded_version_number)`
   → submission_versions `(submission_id, version_number)`.
-- `score numeric`, `feedback text NULL`, `status text` — CHECK DRAFT/PUBLISHED.
+- `score numeric`, `feedback text NULL`, `status text` — CHECK DRAFT/PUBLISHED;
+  `source text` MANUAL/AUTO_ZERO_NO_SUBMISSION; `revision integer >= 1`.
 - `graded_by uuid` — FK → users; `graded_at timestamptz`.
 - `published_by uuid NULL` — FK → users; `published_at timestamptz NULL`; `updated_at`.
 - CHECK score hữu hạn và không âm; trigger kiểm tra không vượt max_score của bài,
   đồng thời chặn hạ max_score dưới điểm đã có. Service vẫn kiểm tra dữ liệu/quyền;
   thang điểm và độ chính xác cần review Q05.
-- Đề xuất Published bắt buộc có người và giờ công bố; Draft không có hai trường này.
-  Quy tắc sửa/thu hồi điểm Published vẫn phải chốt Q05.
-- Chưa có điểm thì không có dòng Grade; điểm 0 là điểm hợp lệ, không dùng để biểu thị
-  chưa chấm. Không thêm lịch sử mọi lần sửa điểm vì Client Log #6 không bắt buộc.
-- Grade ghi rõ phiên bản đã chấm. Không mặc định điểm của bản cũ áp dụng cho bản mới
-  khi SV nộp lại; Q06 quyết định có giữ, ẩn hay reset điểm.
+- Published bắt buộc có người/giờ công bố; Draft không có hai trường này. Sửa điểm
+  Published giữ Published và bổ sung history. Không được thu hồi về Draft.
+- AUTO_ZERO_NO_SUBMISSION bắt buộc 0/Published/null submission/null version. GV sửa
+  thì nguồn hiện tại thành MANUAL, giữ Published và không tạo bài nộp; nguồn cũ ở history.
+- Không có Grade = chưa có kết quả, khác điểm 0. Công bố atomic yêu cầu mọi bài đã
+  nộp được chấm rồi mới tạo 0 cho SV active chưa nộp và đóng nộp bài.
+- Grade mới tham chiếu version hiện hành; grade cũ đã chấm v1 rồi có v2 vẫn giữ v1,
+  cho phép sửa/công bố đúng bản đã chấm. Không đổi identity/version của grade có sẵn.
+
+### `grade_history`
+
+- PK `(grade_id uuid, version integer)`; grade_id FK → grades, version tăng theo revision.
+- Snapshot `score`, `feedback`, `status`, `source`, `submission_id`, `graded_version_number`;
+  `changed_by uuid` FK → users, `changed_at timestamptz`.
+- Backfill một snapshot nguyên trạng cho mỗi Grade cũ. Trigger append khi tạo/sửa;
+  cấm UPDATE/DELETE. Student API chỉ trả các snapshot Published, GV lớp xem toàn bộ.
+
+### Hạ tầng auth
+
+- `auth_sessions`: UUID PK, user_id FK, created_at/expires_at/revoked_at.
+- `auth_refresh_tokens`: token_hash PK (SHA-256), session_id FK, created_at/used_at.
+- Refresh token thô chỉ ở cookie HttpOnly; password_hash/token_hash không xuất qua
+  DTO hay ERD công khai có giá trị thật. Chi tiết session/revocation nằm trong README.
 
 ### `files`
 

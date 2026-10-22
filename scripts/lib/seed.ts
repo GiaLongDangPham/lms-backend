@@ -82,8 +82,9 @@ export async function seedDevelopment(pool: pg.Pool, password: string, connectio
     for (const [id, code, name] of [
       [seedIds.classA, 'LMS-DEMO-A', 'Lớp Demo A'], [seedIds.classB, 'LMS-DEMO-B', 'Lớp Demo B'],
     ]) {
-      await insert(`INSERT INTO classes(id, code, name, term, created_by)
-        VALUES ($1, $2, $3, '2026-HK1', $4) ON CONFLICT (id) DO NOTHING`, [id, code, name, seedIds.admin]);
+      await insert(`INSERT INTO classes(id, code, name, term, created_by, course_code)
+        VALUES ($1, $2, $3, '2026-HK1', $4, $5) ON CONFLICT (id) DO NOTHING`,
+      [id, code, name, seedIds.admin, id === seedIds.classA ? 'DEMO-COURSE-A' : 'DEMO-COURSE-B']);
     }
     for (const [classId, teacher] of [
       [seedIds.classA, seedIds.teacher1], [seedIds.classA, seedIds.teacher2], [seedIds.classB, seedIds.teacher2],
@@ -152,13 +153,13 @@ export async function seedDevelopment(pool: pg.Pool, password: string, connectio
       await insert('INSERT INTO submission_files VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
         [submission, version, fileId(number)]);
     }
-    await insert(`INSERT INTO grades(submission_id, graded_version_number, score, feedback, graded_by)
-      VALUES ($1, 2, 8.5, 'Feedback Draft giả lập; chưa hiển thị cho SV', $2)
-      ON CONFLICT (submission_id) DO NOTHING`, [seedIds.submission1, seedIds.teacher1]);
-    await insert(`INSERT INTO grades(submission_id, graded_version_number, score, feedback,
+    await insert(`INSERT INTO grades(submission_id, assignment_id, enrollment_id, graded_version_number, score, feedback, graded_by)
+      VALUES ($1, $3, $4, 2, 8.5, 'Feedback Draft giả lập; chưa hiển thị cho SV', $2)
+      ON CONFLICT (submission_id) DO NOTHING`, [seedIds.submission1, seedIds.teacher1, seedIds.assignmentA, seedIds.enrollment1]);
+    await insert(`INSERT INTO grades(submission_id, assignment_id, enrollment_id, graded_version_number, score, feedback,
       status, graded_by, published_by, published_at)
-      VALUES ($1, 1, 9, 'Feedback Published giả lập', 'PUBLISHED', $2, $3, '2026-10-20T11:00:00Z')
-      ON CONFLICT (submission_id) DO NOTHING`, [seedIds.submission2, seedIds.teacher1, seedIds.teacher2]);
+      VALUES ($1, $4, $5, 1, 9, 'Feedback Published giả lập', 'PUBLISHED', $2, $3, '2026-10-20T11:00:00Z')
+      ON CONFLICT (submission_id) DO NOTHING`, [seedIds.submission2, seedIds.teacher1, seedIds.teacher2, seedIds.assignmentA, seedIds.enrollment2]);
     await insert(`INSERT INTO notifications(id, recipient_id, assignment_id, kind, title, body, deduplication_key)
       VALUES ('80000000-0000-4000-8000-000000000001', $1, $2, 'ASSIGNMENT_CREATED',
       'Bài tập mẫu mới', 'Có bài tập mẫu trong lớp A.', 'fixture-assignment-a') ON CONFLICT DO NOTHING`,
