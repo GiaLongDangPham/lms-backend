@@ -1,11 +1,13 @@
-# D1 · ERD cập nhật theo nghiệp vụ 17/10
+# D1 · ERD cập nhật theo nghiệp vụ 24/10/2026
 
-Đối chiếu migration 0001–0003, D2 commit 532f983 và Client Log 18–20/L04/L05/L14/L20.
+Đối chiếu migration 0001–0005, D2 commit 532f983 và Client Log 18–20/L04/L05/L14/L20.
 Có 16 bảng nghiệp vụ và 2 bảng auth; không vẽ bảng quản lý migration.
 Xem [từ điển dữ liệu](database-design.md) và [quyết định](D1-decisions.md).
 
 PK = khóa chính; FK = khóa ngoại; UK = khóa duy nhất. UUID đã được Long chốt Q02.
-Migration `0003` bổ sung nghiệp vụ mới và giữ dữ liệu đã có từ 0001/0002.
+Migration `0003` bổ sung nghiệp vụ mới; `0004` áp dụng precision điểm, lifecycle
+file và giới hạn file; `0005` lưu người công bố toàn bài. Các migration giữ dữ liệu
+đã có và không sửa lịch sử đã áp dụng.
 ERD thể hiện cột chính và cardinality, không liệt kê toàn bộ audit fields/index.
 `assignments.results_published_by` liên kết tới `users` để lưu actor công bố toàn
 bài trong DB; nó chỉ có giá trị cùng `results_published_at`, cả hai được ghi một lần

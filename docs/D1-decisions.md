@@ -54,12 +54,14 @@ Chỉ ghi các quyết định Long đã xác nhận; phần còn mở cần bi�
 
 ## Phạm vi implementation local trước review
 
-- `0001` giữ nguyên checksum; `0002` thêm auth; `0003` thêm course_code/description,
-  grade history, automatic zero và publication theo bài. Migration B3 tiếp theo bổ
-  sung precision, lifecycle file và invariant deadline/file còn thiếu.
+- `0001`–`0003` giữ nguyên; `0004_b3_assignments_submissions.sql` áp dụng precision
+  điểm hai chữ số, lifecycle file, quy tắc gắn file và giới hạn dung lượng/số lượng.
+  B3 service/repository cùng coverage tập trung đã có trong nhánh.
+- `0005_assignment_publication_actor.sql` lưu và backfill người công bố toàn bài,
+  buộc thời điểm/người công bố đi cùng nhau và giữ provenance công bố bất biến.
+  Assignment service/repository liên quan đã có trong nhánh; actor chỉ lưu nội bộ
+  trong database.
 - FK dùng RESTRICT để không tự xóa dây chuyền lịch sử. B1 có API vô hiệu hóa tài
   khoản/ghi danh; chưa có archive lớp hoặc hard-delete qua API.
-- `0003` chưa cưỡng chế cửa sổ nộp lại, precision hai chữ số hoặc lifecycle file;
-  service và migration B3 phải thực thi các quyết định Q05-Q08.
 - Khi đổi schema sau khi đã áp dụng `0001`, tạo migration tiếp theo; không sửa file
   đã áp dụng để làm cho history/checksum mất nhất quán.
