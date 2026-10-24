@@ -94,6 +94,7 @@ if (process.argv.includes('--self-test')) {
   assert.equal(submission.currentVersionNumber, 2);
   assert.equal(submission.canSubmit, false);
   assert.equal(submission.lockedReason, 'GRADED');
+  assert.ok(resolve(spec.components.schemas.Submission).properties.lockedReason.enum.includes('DEADLINE_PASSED'));
   assert.equal(Object.hasOwn(submission, 'score'), false);
   const result = exampleFor(resolve(spec.paths['/assignments/{assignmentId}/my-result'].get.responses['200']).content['application/json'].schema);
   assert.equal(result.status, 'PUBLISHED');
@@ -108,6 +109,18 @@ if (process.argv.includes('--self-test')) {
   assert.equal(comment.assignmentId, null);
   assert.ok(comment.submissionId);
   assert.ok(spec.paths['/assignments/{assignmentId}/submissions'].post.responses['409']);
+  assert.match(spec.paths['/assignments/{assignmentId}/submissions'].post.description, /DEADLINE_LOCKS_RESUBMISSION/);
+  assert.match(spec.paths['/assignments/{assignmentId}'].patch.description, /reopens resubmission/);
+  assert.equal(resolve(spec.components.schemas.SaveDraftGradeRequest).properties.score.multipleOf, 0.01);
+  assert.ok(spec.paths['/files'].post['x-allowed-extensions'].includes('cpp'));
+  assert.ok(spec.paths['/files'].post['x-allowed-extensions'].includes('py'));
+  assert.ok(spec.paths['/files'].post['x-allowed-extensions'].includes('zip'));
+  assert.equal(spec.paths['/files'].post['x-allowed-extensions'].includes('rar'), false);
+  assert.ok(spec.paths['/files'].post['x-denied-extension-examples'].includes('exe'));
+  assert.equal(spec.paths['/files'].post['x-max-size-bytes'], 26_214_400);
+  assert.equal(spec.paths['/files'].post['x-storage-policy'].pendingTtlHours, 24);
+  assert.equal(resolve(spec.components.schemas.SubmitAssignmentRequest).properties.fileIds.maxItems, 10);
+  assert.equal(spec.paths['/assignments/{assignmentId}/submissions'].post['x-max-total-size-bytes'], 104_857_600);
   function send(method, path, headers = {}) {
     const response = {
       status: 0,
@@ -134,7 +147,7 @@ if (process.argv.includes('--self-test')) {
   assert.equal(discovery.status, 200);
   assert.equal(JSON.parse(discovery.body).openapi, '/api/openapi.json');
   assert.equal(send('GET', '/api/missing').status, 404);
-  console.log('Mock self-test passed: discovery, HTTP dispatch, submission lock, Draft separation, assignment-wide publication, automatic-zero summary, publication blocker and comment target.');
+  console.log('Mock self-test passed: discovery, HTTP dispatch, grade/deadline submission locks, deadline reopening, two-decimal scores, file allowlist, Draft separation, assignment-wide publication, automatic-zero summary, publication blocker and comment target.');
   process.exit(0);
 }
 
