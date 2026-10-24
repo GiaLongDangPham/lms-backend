@@ -71,6 +71,9 @@ export function createB1Router(pool: pg.Pool, config: AuthConfig, enrollmentServ
   router.patch('/users/:id', requireAdmin, async (req, res) => {
     const id = parse(uuid, req.params.id); const body = parse(updateUser, req.body);
     const user = await transaction(pool, async client => {
+      const activeEnrollments = body.isActive === true
+        ? await enrollmentService.lockActiveEnrollmentsForStudent(client, id)
+        : [];
       const target = await client.query<User>(`SELECT ${userColumns} FROM users WHERE id = $1 FOR UPDATE`, [id]);
       const old = target.rows[0];
       if (!old) throw new ApiError(404, 'NOT_FOUND', 'Account was not found.');
@@ -80,6 +83,9 @@ export function createB1Router(pool: pg.Pool, config: AuthConfig, enrollmentServ
         body.isActive ?? old.is_active, id]);
       if (body.isActive === false) {
         await client.query('UPDATE auth_sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL', [id]);
+      }
+      if (body.isActive === true && !old.is_active && old.role === 'STUDENT') {
+        await enrollmentService.backfillPublishedResultsForStudent(client, activeEnrollments);
       }
       return result.rows[0];
     });

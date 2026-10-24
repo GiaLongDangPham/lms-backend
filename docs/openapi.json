@@ -1653,7 +1653,7 @@
             "$ref": "#/components/responses/InternalError"
           }
         },
-        "description": " Initial-password accounts receive 403 PASSWORD_CHANGE_REQUIRED. Account/class management is Admin-only; schoolCode and role are immutable through B1 update. Access checks use current active membership."
+        "description": " Initial-password accounts receive 403 PASSWORD_CHANGE_REQUIRED. Account/class management is Admin-only; schoolCode and role are immutable through B1 update. Reactivating a STUDENT account atomically creates any missing Published 0 results for its active enrollments when assignments are already published, preserving existing grades/history and fabricating no submission or version; submission access stays locked. Access checks use current active membership."
       }
     },
     "/users/{userId}/reset-password": {

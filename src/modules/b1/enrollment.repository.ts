@@ -38,6 +38,16 @@ export class EnrollmentRepository {
       [classId, enrollmentId])).rows[0];
   }
 
+  async activeEnrollmentClassIds(db: pg.PoolClient, studentId: string): Promise<string[]> {
+    return (await db.query<{ class_id: string }>(`SELECT class_id FROM enrollments
+      WHERE student_id=$1 AND is_active ORDER BY class_id`, [studentId])).rows.map(row => row.class_id);
+  }
+
+  async lockActiveEnrollmentsForStudent(db: pg.PoolClient, studentId: string): Promise<EnrollmentRow[]> {
+    return (await db.query<EnrollmentRow>(`SELECT * FROM enrollments
+      WHERE student_id=$1 AND is_active ORDER BY class_id,id FOR UPDATE`, [studentId])).rows;
+  }
+
   async setEnrollmentActive(db: pg.PoolClient, classId: string, enrollmentId: string, isActive: boolean) {
     return (await db.query<EnrollmentRow>(`UPDATE enrollments SET is_active=$3
       WHERE class_id=$1 AND id=$2 RETURNING *`, [classId, enrollmentId, isActive])).rows[0];

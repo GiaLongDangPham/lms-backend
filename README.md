@@ -170,6 +170,8 @@ khi đánh dấu B1 Done. Chưa có kết quả GitHub CI cho các thay đổi l
   đóng nộp bài và gọi lại không tạo trùng kết quả/lịch sử/thông báo của cùng cohort.
   Ghi danh mới hoặc kích hoạt lại sau đó thêm kết quả 0 Published còn thiếu atomically,
   giữ nguyên Grade/history đã có, không tạo submission/version giả và không mở khóa nộp.
+  Kích hoạt lại tài khoản STUDENT cũng backfill kết quả cho mọi enrollment đang active
+  và assignment đã Published trong cùng transaction; Grade/history cũ được giữ nguyên.
   `assignments.results_published_by` lưu người công bố trong DB, không xuất hiện trong API.
 - **L04:** sửa điểm Published giữ Published, SV thấy ngay; trigger lưu snapshot
   score/feedback/trạng thái/nguồn/người/giờ và version đã chấm trong `grade_history`.

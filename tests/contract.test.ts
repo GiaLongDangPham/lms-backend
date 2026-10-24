@@ -38,6 +38,9 @@ describe('D2 OpenAPI contract', () => {
       expect(descriptions[operationId]).toMatch(/locked/i);
     }
     expect(descriptions.publishAssignmentGrades).toMatch(enrollmentRule);
+    expect(descriptions.updateUser).toMatch(/reactivating[\s\S]*STUDENT account/i);
+    expect(descriptions.updateUser).toMatch(/active enrollment/i);
+    expect(descriptions.updateUser).toContain('Published 0');
     expect(operations.some(({ operationId }) => /submission.*note|note.*submission|unpublish/i.test(operationId))).toBe(false);
   });
 });

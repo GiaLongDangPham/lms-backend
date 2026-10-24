@@ -16,6 +16,18 @@ export class EnrollmentService {
     }
   }
 
+  async lockActiveEnrollmentsForStudent(db: import('pg').PoolClient, studentId: string): Promise<EnrollmentRow[]> {
+    const classIds = await this.repository.activeEnrollmentClassIds(db, studentId);
+    for (const classId of classIds) await this.lockClass(db, classId);
+    return this.repository.lockActiveEnrollmentsForStudent(db, studentId);
+  }
+
+  async backfillPublishedResultsForStudent(db: import('pg').PoolClient, enrollments: EnrollmentRow[]): Promise<void> {
+    for (const enrollment of enrollments) {
+      await this.backfill.backfillPublishedResultsForEnrollment(db, enrollment.class_id, enrollment.id);
+    }
+  }
+
   private async activeStudent(db: import('pg').PoolClient, studentId: string) {
     const student = await this.repository.findActiveStudent(db, studentId);
     if (!student) throw new ApiError(404, 'NOT_FOUND', 'Student was not found.');
