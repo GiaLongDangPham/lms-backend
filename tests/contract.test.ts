@@ -31,6 +31,7 @@ describe('D2 OpenAPI contract', () => {
     for (const operationId of ['enrollStudent', 'updateEnrollment']) {
       expect(descriptions[operationId]).toMatch(enrollmentRule);
       expect(descriptions[operationId]).toMatch(/preserv(?:e|es|ing)[\s\S]*(?:grade|history)/i);
+      expect(descriptions[operationId]).toContain('AUTO_ZERO_NO_SUBMISSION');
       expect(descriptions[operationId]).toMatch(/no submission/i);
       expect(descriptions[operationId]).toMatch(/locked/i);
     }

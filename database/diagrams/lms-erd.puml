@@ -1,6 +1,6 @@
 @startuml lms-erd
 !pragma layout smetana
-title LMS - schema 0001-0003 (17/10/2026)
+title LMS - schema 0001-0005 (24/10/2026)
 hide circle
 skinparam linetype ortho
 skinparam entity {

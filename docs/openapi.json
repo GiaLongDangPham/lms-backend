@@ -605,7 +605,7 @@
         "x-decision-pending": [
           "Q10: access to historical work after withdrawal"
         ],
-        "description": "Active duplicate enrollment returns 409. Re-enrollment reactivates the same inactive enrollment ID; all submission/grade history is preserved. For assignments already published, enrollment creation atomically creates any missing Published 0 result, preserving existing grades and history and fabricating no submission or submission version; submission access stays locked. Deactivation blocks student class access; assigned teachers retain access to historical work."
+        "description": "Active duplicate enrollment returns 409. Re-enrollment reactivates the same inactive enrollment ID; all submission/grade history is preserved. For assignments already published, enrollment creation atomically creates any missing Published 0 result with source AUTO_ZERO_NO_SUBMISSION, preserving existing grades and history and fabricating no submission or submission version; submission access stays locked. Deactivation blocks student class access; assigned teachers retain access to historical work."
       }
     },
     "/files": {
@@ -1802,7 +1802,7 @@
             "$ref": "#/components/responses/InternalError"
           }
         },
-        "description": "Initial-password accounts receive 403 PASSWORD_CHANGE_REQUIRED. Account/class management is Admin-only; schoolCode and role are immutable through B1 update. For assignments already published, reactivating an enrollment atomically creates any missing Published 0 result, preserving existing grades and history and fabricating no submission or submission version; submission access stays locked. Access checks use current active membership."
+        "description": "Initial-password accounts receive 403 PASSWORD_CHANGE_REQUIRED. Account/class management is Admin-only; schoolCode and role are immutable through B1 update. For assignments already published, reactivating an enrollment atomically creates any missing Published 0 result with source AUTO_ZERO_NO_SUBMISSION, preserving existing grades and history and fabricating no submission or submission version; submission access stays locked. Access checks use current active membership."
       }
     },
     "/classes/{classId}/enrollments/bulk": {
