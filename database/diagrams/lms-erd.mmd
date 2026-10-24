@@ -1,4 +1,4 @@
-%% LMS D1 - 0001_initial_schema.sql; business review pending CP1/CP2
+%% LMS - migrations 0001-0003; Client Log 18-20, L04/L05/L14/L20; 2026-10-17
 %% Main fields only; audit fields and constraints are documented in SQL.
 erDiagram
     USERS {
@@ -9,12 +9,15 @@ erDiagram
         text password_hash
         text role
         boolean is_active
+        boolean must_change_password
     }
     CLASSES {
         uuid id PK
         text code
+        text course_code "UK with code and term"
         text name
         text term
+        text description "NULL"
         uuid created_by FK
     }
     CLASS_TEACHERS {
@@ -43,6 +46,7 @@ erDiagram
         text title
         timestamptz deadline_at
         numeric max_score
+        timestamptz results_published_at "NULL until assignment-wide publication"
     }
     SUBMISSIONS {
         uuid id PK
@@ -55,16 +59,47 @@ erDiagram
         integer version_number PK
         timestamptz submitted_at
         timestamptz deadline_at_submission
+        text note "NULL; private; max 2000"
     }
     GRADES {
-        uuid submission_id PK, FK
-        integer graded_version_number FK
+        uuid id PK
+        uuid assignment_id FK "UK with enrollment_id"
+        uuid enrollment_id FK
+        uuid submission_id FK, UK "NULL when no submission"
+        integer graded_version_number FK "NULL when no submission"
         numeric score
         text feedback
         text status
+        text source "MANUAL or AUTO_ZERO_NO_SUBMISSION"
+        integer revision
         uuid graded_by FK
         uuid published_by FK
         timestamptz published_at
+    }
+    GRADE_HISTORY {
+        uuid grade_id PK, FK
+        integer version PK
+        numeric score
+        text feedback
+        text status
+        text source
+        uuid submission_id FK "NULL allowed"
+        integer graded_version_number FK "NULL allowed"
+        uuid changed_by FK
+        timestamptz changed_at
+    }
+    AUTH_SESSIONS {
+        uuid id PK
+        uuid user_id FK
+        timestamptz created_at
+        timestamptz expires_at
+        timestamptz revoked_at "NULL until revoked"
+    }
+    AUTH_REFRESH_TOKENS {
+        text token_hash PK "SHA256; never raw token"
+        uuid session_id FK
+        timestamptz created_at
+        timestamptz used_at "NULL until rotated"
     }
     FILES {
         uuid id PK
@@ -121,8 +156,15 @@ erDiagram
     ASSIGNMENTS ||..o{ SUBMISSIONS : receives
     ENROLLMENTS ||..o{ SUBMISSIONS : owns
     SUBMISSIONS ||--o{ SUBMISSION_VERSIONS : retains_history
-    SUBMISSIONS ||--o| GRADES : has_current_result
-    SUBMISSION_VERSIONS ||..o| GRADES : is_graded
+    ASSIGNMENTS ||..o{ GRADES : has_results
+    ENROLLMENTS ||..o{ GRADES : owns_results
+    SUBMISSIONS |o..o| GRADES : optional_submission
+    SUBMISSION_VERSIONS |o..o| GRADES : optional_graded_version
+    GRADES ||--|{ GRADE_HISTORY : immutable_snapshots
+    SUBMISSION_VERSIONS |o..o{ GRADE_HISTORY : preserves_graded_version
+    USERS ||..o{ GRADE_HISTORY : changes
+    USERS ||..o{ AUTH_SESSIONS : signs_in
+    AUTH_SESSIONS ||..o{ AUTH_REFRESH_TOKENS : rotates
     USERS ||..o{ GRADES : grades
     USERS |o..o{ GRADES : publishes
     USERS ||..o{ FILES : uploads

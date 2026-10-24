@@ -21,6 +21,11 @@ function exampleFor(schema, depth = 0) {
   const value = resolve(schema);
   if (Object.hasOwn(value, 'example')) return value.example;
   if (Object.hasOwn(value, 'const')) return value.const;
+  if (value.allOf) return Object.assign({}, ...value.allOf.map(part => exampleFor(part, depth + 1)));
+  if (value.oneOf || value.anyOf) {
+    const choices = value.oneOf ?? value.anyOf;
+    return exampleFor(choices.find(part => resolve(part).type !== 'null') ?? choices[0], depth + 1);
+  }
   if (value.enum) return value.enum[0];
   if (value.type === 'object') {
     return Object.fromEntries(Object.entries(value.properties ?? {})
@@ -96,6 +101,9 @@ if (process.argv.includes('--self-test')) {
   assert.equal(submission.lockedReason, 'GRADED');
   assert.ok(resolve(spec.components.schemas.Submission).properties.lockedReason.enum.includes('DEADLINE_PASSED'));
   assert.equal(Object.hasOwn(submission, 'score'), false);
+  const teacherSubmission = exampleFor(spec.components.schemas.TeacherSubmission);
+  assert.ok(teacherSubmission.id);
+  assert.equal(teacherSubmission.grade.status, 'DRAFT');
   const result = exampleFor(resolve(spec.paths['/assignments/{assignmentId}/my-result'].get.responses['200']).content['application/json'].schema);
   assert.equal(result.status, 'PUBLISHED');
   assert.equal(result.source, 'MANUAL');

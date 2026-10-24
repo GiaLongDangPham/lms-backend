@@ -2,34 +2,8 @@ import type pg from 'pg';
 import { hashPassword } from '../../src/security/password.js';
 import { requireLocalDatabase } from './database.js';
 import { migrationLock } from './migrations.js';
-
-export const seedIds = {
-  admin: '10000000-0000-4000-8000-000000000001',
-  teacher1: '10000000-0000-4000-8000-000000000002',
-  teacher2: '10000000-0000-4000-8000-000000000003',
-  student1: '10000000-0000-4000-8000-000000000004',
-  student2: '10000000-0000-4000-8000-000000000005',
-  student3: '10000000-0000-4000-8000-000000000006',
-  classA: '20000000-0000-4000-8000-000000000001',
-  classB: '20000000-0000-4000-8000-000000000002',
-  enrollment1: '30000000-0000-4000-8000-000000000001',
-  enrollment2: '30000000-0000-4000-8000-000000000002',
-  enrollment3: '30000000-0000-4000-8000-000000000003',
-  materialA: '40000000-0000-4000-8000-000000000001',
-  materialB: '40000000-0000-4000-8000-000000000002',
-  assignmentA: '50000000-0000-4000-8000-000000000001',
-  assignmentLate: '50000000-0000-4000-8000-000000000002',
-  assignmentB: '50000000-0000-4000-8000-000000000003',
-  submission1: '60000000-0000-4000-8000-000000000001',
-  submission2: '60000000-0000-4000-8000-000000000002',
-  submissionLate: '60000000-0000-4000-8000-000000000003',
-};
-
-export const domainTables = [
-  'users', 'classes', 'class_teachers', 'enrollments', 'materials', 'assignments',
-  'submissions', 'submission_versions', 'grades', 'files', 'material_files',
-  'assignment_files', 'submission_files', 'notifications', 'comments',
-] as const;
+import { seedIds } from './seed-data.js';
+export { domainTables, seedIds } from './seed-data.js';
 
 export async function seedDevelopment(pool: pg.Pool, password: string, connectionString: string): Promise<number> {
   requireLocalDatabase(connectionString);
@@ -82,8 +56,9 @@ export async function seedDevelopment(pool: pg.Pool, password: string, connectio
     for (const [id, code, name] of [
       [seedIds.classA, 'LMS-DEMO-A', 'Lớp Demo A'], [seedIds.classB, 'LMS-DEMO-B', 'Lớp Demo B'],
     ]) {
-      await insert(`INSERT INTO classes(id, code, name, term, created_by)
-        VALUES ($1, $2, $3, '2026-HK1', $4) ON CONFLICT (id) DO NOTHING`, [id, code, name, seedIds.admin]);
+      await insert(`INSERT INTO classes(id, code, name, term, created_by, course_code)
+        VALUES ($1, $2, $3, '2026-HK1', $4, $5) ON CONFLICT (id) DO NOTHING`,
+      [id, code, name, seedIds.admin, id === seedIds.classA ? 'DEMO-COURSE-A' : 'DEMO-COURSE-B']);
     }
     for (const [classId, teacher] of [
       [seedIds.classA, seedIds.teacher1], [seedIds.classA, seedIds.teacher2], [seedIds.classB, seedIds.teacher2],
@@ -152,13 +127,13 @@ export async function seedDevelopment(pool: pg.Pool, password: string, connectio
       await insert('INSERT INTO submission_files VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
         [submission, version, fileId(number)]);
     }
-    await insert(`INSERT INTO grades(submission_id, graded_version_number, score, feedback, graded_by)
-      VALUES ($1, 2, 8.5, 'Feedback Draft giả lập; chưa hiển thị cho SV', $2)
-      ON CONFLICT (submission_id) DO NOTHING`, [seedIds.submission1, seedIds.teacher1]);
-    await insert(`INSERT INTO grades(submission_id, graded_version_number, score, feedback,
+    await insert(`INSERT INTO grades(submission_id, assignment_id, enrollment_id, graded_version_number, score, feedback, graded_by)
+      VALUES ($1, $3, $4, 2, 8.5, 'Feedback Draft giả lập; chưa hiển thị cho SV', $2)
+      ON CONFLICT (submission_id) DO NOTHING`, [seedIds.submission1, seedIds.teacher1, seedIds.assignmentA, seedIds.enrollment1]);
+    await insert(`INSERT INTO grades(submission_id, assignment_id, enrollment_id, graded_version_number, score, feedback,
       status, graded_by, published_by, published_at)
-      VALUES ($1, 1, 9, 'Feedback Published giả lập', 'PUBLISHED', $2, $3, '2026-10-20T11:00:00Z')
-      ON CONFLICT (submission_id) DO NOTHING`, [seedIds.submission2, seedIds.teacher1, seedIds.teacher2]);
+      VALUES ($1, $4, $5, 1, 9, 'Feedback Published giả lập', 'PUBLISHED', $2, $3, '2026-10-20T11:00:00Z')
+      ON CONFLICT (submission_id) DO NOTHING`, [seedIds.submission2, seedIds.teacher1, seedIds.teacher2, seedIds.assignmentA, seedIds.enrollment2]);
     await insert(`INSERT INTO notifications(id, recipient_id, assignment_id, kind, title, body, deduplication_key)
       VALUES ('80000000-0000-4000-8000-000000000001', $1, $2, 'ASSIGNMENT_CREATED',
       'Bài tập mẫu mới', 'Có bài tập mẫu trong lớp A.', 'fixture-assignment-a') ON CONFLICT DO NOTHING`,
