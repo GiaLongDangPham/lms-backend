@@ -79,6 +79,7 @@ describe.skipIf(!target)('assignment and submission boundaries', () => {
     const attached = await pendingFile();
     const attachedSubmission = await submit(assignmentId, student, [attached]);
     expect(attachedSubmission.status).toBe(201);
+    const submissionId = attachedSubmission.body.id as string;
     const missing = randomUUID();
     const cases: Array<{ ids: string[]; status: number; code: string }> = [
       { ids: [duplicate, duplicate], status: 400, code: 'VALIDATION_ERROR' },
@@ -91,11 +92,16 @@ describe.skipIf(!target)('assignment and submission boundaries', () => {
     ];
     for (const testCase of cases) {
       const before = await pool.query<{ count: string }>('SELECT count(*) FROM submissions WHERE assignment_id=$1', [assignmentId]);
+      const versionsBefore = await pool.query<{ count: string }>(
+        'SELECT count(*) FROM submission_versions WHERE submission_id=$1', [submissionId]);
       const response = await submit(assignmentId, student, testCase.ids);
       expect(response.status).toBe(testCase.status);
       expect(response.body.error.code).toBe(testCase.code);
       const after = await pool.query<{ count: string }>('SELECT count(*) FROM submissions WHERE assignment_id=$1', [assignmentId]);
       expect(after.rows[0]!.count).toBe(before.rows[0]!.count);
+      const versionsAfter = await pool.query<{ count: string }>(
+        'SELECT count(*) FROM submission_versions WHERE submission_id=$1', [submissionId]);
+      expect(versionsAfter.rows[0]!.count).toBe(versionsBefore.rows[0]!.count);
       const candidates = testCase.ids.filter(idValue => idValue !== attached);
       expect((await fileStatus(candidates)).every(file => file.lifecycle_status === 'PENDING')).toBe(true);
     }
