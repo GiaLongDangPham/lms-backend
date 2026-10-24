@@ -1,71 +1,255 @@
-import type pg from 'pg';
-import { ApiError, type User } from '../b1/common.js';
-import { type Principal, requireClassAccess } from '../b1/auth.js';
+import { requireClassAccess, type Principal } from '../b1/auth.js';
+import { ApiError, transaction } from '../b1/common.js';
+import { AssessmentRepository, type Db, type GradeRow } from './assessment.repository.js';
 
-export type Db = pg.Pool | pg.PoolClient;
-export interface Assignment {
-  id: string; class_id: string; deadline_at: Date; results_published_at: Date | null; max_score: string;
+export interface SaveSubmissionGradeInput {
+  score: number;
+  feedback?: string | null;
+  gradedVersionNumber: number;
 }
-export interface Grade {
-  id: string; assignment_id: string; enrollment_id: string; submission_id: string | null;
-  graded_version_number: number | null; score: string; feedback: string | null; status: 'DRAFT' | 'PUBLISHED';
-  source: 'MANUAL' | 'AUTO_ZERO_NO_SUBMISSION'; graded_by: string; graded_at: Date;
-  published_by: string | null; published_at: Date | null;
+
+export interface CorrectPublishedNoSubmissionGradeInput {
+  score: number;
+  feedback?: string | null;
 }
-export function teacherOnly(principal: Principal) {
-  if (principal.user.role !== 'TEACHER') throw new ApiError(403,'FORBIDDEN','Assigned teacher access is required.');
+
+interface UserSummary {
+  id: string;
+  schoolCode: string;
+  fullName: string;
+  role: 'ADMIN' | 'TEACHER' | 'STUDENT';
 }
-export async function assignmentAccess(pool: pg.Pool, principal: Principal, id: string, client: Db = pool, lock = false) {
-  const rows=await client.query<Assignment>(`SELECT * FROM assignments WHERE id=$1 ${lock?'FOR UPDATE':''}`,[id]);
-  const a=rows.rows[0]; if(!a) throw new ApiError(404,'NOT_FOUND','Assignment was not found.');
-  await requireClassAccess(client,principal,a.class_id,lock);
-  return a;
+
+export interface PublishedGrade {
+  assignmentId: string;
+  student: UserSummary;
+  submissionId: string | null;
+  gradedVersionNumber: number | null;
+  score: number;
+  feedback: string | null;
+  status: 'DRAFT' | 'PUBLISHED';
+  source: 'MANUAL' | 'AUTO_ZERO_NO_SUBMISSION';
+  publishedBy: UserSummary | null;
+  publishedAt: string | null;
 }
-export async function summary(db: Db, userId: string) {
-  const r=await db.query<User>('SELECT id,school_code,full_name,role FROM users WHERE id=$1',[userId]);
-  const u=r.rows[0]!; return {id:u.id,schoolCode:u.school_code,fullName:u.full_name,role:u.role};
+
+export interface Grade extends PublishedGrade {
+  gradedBy: UserSummary;
+  gradedAt: string;
 }
-export async function gradeDto(db: Db, g: Grade, publishedOnly = false) {
-  const e=await db.query<{student_id:string}>('SELECT student_id FROM enrollments WHERE id=$1',[g.enrollment_id]);
-  const data={ assignmentId:g.assignment_id, student:await summary(db,e.rows[0]!.student_id),
-    submissionId:g.submission_id,gradedVersionNumber:g.graded_version_number,score:Number(g.score),feedback:g.feedback,
-    status:g.status,source:g.source,publishedBy:g.published_by?await summary(db,g.published_by):null,
-    publishedAt:g.published_at?.toISOString()??null };
-  return publishedOnly?data:{...data,gradedBy:await summary(db,g.graded_by),gradedAt:g.graded_at.toISOString()};
+
+export interface GradeHistory {
+  assignmentId: string;
+  student: UserSummary;
+  items: Array<{
+    version: number;
+    score: number;
+    feedback: string | null;
+    status: 'DRAFT' | 'PUBLISHED';
+    source: 'MANUAL' | 'AUTO_ZERO_NO_SUBMISSION';
+    changedBy: UserSummary;
+    changedAt: string;
+  }>;
 }
-export async function submissionDto(db: Db, submissionId: string, teacher = false) {
-  const r=await db.query<{id:string;assignment_id:string;student_id:string;created_at:Date;results_published_at:Date|null}>(
-    `SELECT s.*,e.student_id,a.results_published_at FROM submissions s JOIN enrollments e ON e.id=s.enrollment_id
-    JOIN assignments a ON a.id=s.assignment_id WHERE s.id=$1`,[submissionId]);
-  const s=r.rows[0]!;
-  const v=await db.query<{version_number:number;submitted_at:Date;deadline_at_submission:Date;note:string|null}>(
-    'SELECT * FROM submission_versions WHERE submission_id=$1 ORDER BY version_number',[submissionId]);
-  const files=await db.query(`SELECT sf.version_number,f.id,f.original_name,f.mime_type,f.size_bytes,f.created_at
-    FROM submission_files sf JOIN files f ON f.id=sf.file_id WHERE sf.submission_id=$1 ORDER BY sf.file_id`,[submissionId]);
-  const grade=await db.query<Grade>('SELECT * FROM grades WHERE submission_id=$1',[submissionId]);
-  const g=grade.rows[0]; const locked=!!g||!!s.results_published_at;
-  return { id:s.id,assignmentId:s.assignment_id,student:await summary(db,s.student_id),
-    currentVersionNumber:v.rows.at(-1)?.version_number ?? 0,
-    versions:v.rows.map(x=>({versionNumber:x.version_number,submittedAt:x.submitted_at.toISOString(),
-      deadlineAtSubmission:x.deadline_at_submission.toISOString(),isLate:x.submitted_at>x.deadline_at_submission,note:x.note,
-      files:files.rows.filter(f=>f.version_number===x.version_number).map(f=>({id:f.id,originalName:f.original_name,
-        mimeType:f.mime_type,sizeBytes:Number(f.size_bytes),createdAt:f.created_at.toISOString()}))})),
-    canSubmit:!locked,lockedReason:locked?'GRADED':null,createdAt:s.created_at.toISOString(),
-    ...(teacher?{grade:g?{score:Number(g.score),status:g.status,source:g.source}:null}:{}) };
+
+export interface AssignmentGradePublication {
+  assignmentId: string;
+  publishedCount: number;
+  automaticZeroCount: number;
+  publishedAt: string;
 }
-export async function historyDto(db: Db, assignmentId: string, studentId: string, publishedOnly: boolean) {
-  const result=await db.query<Grade>(`SELECT g.* FROM grades g JOIN enrollments e ON e.id=g.enrollment_id
-    WHERE g.assignment_id=$1 AND e.student_id=$2`,[assignmentId,studentId]);
-  const g=result.rows[0];
-  if(!g || (publishedOnly && g.status!=='PUBLISHED')) throw new ApiError(404,'NOT_FOUND','Published result was not found.');
-  const history=await db.query<{version:number;score:string;feedback:string|null;status:string;source:string;changed_by:string;changed_at:Date}>(
-    `SELECT * FROM grade_history WHERE grade_id=$1 ${publishedOnly?"AND status='PUBLISHED'":''} ORDER BY version`,[g.id]);
-  return {assignmentId,student:await summary(db,studentId),items:await Promise.all(history.rows.map(async h=>({version:h.version,
-    score:Number(h.score),feedback:h.feedback,status:h.status,source:h.source,changedBy:await summary(db,h.changed_by),
-    changedAt:h.changed_at.toISOString()})))};
-}
-export async function notifyResult(db: Db, g: Grade, studentId: string, revision: number) {
-  await db.query(`INSERT INTO notifications(recipient_id,assignment_id,kind,title,body,deduplication_key)
-    VALUES($1,$2,'GRADE_PUBLISHED','Kết quả bài tập','Kết quả bài tập đã được cập nhật.',$3)
-    ON CONFLICT(recipient_id,deduplication_key) DO NOTHING`,[studentId,g.assignment_id,`grade:${g.id}:${revision}`]);
+
+export class AssessmentService {
+  constructor(private readonly repository: AssessmentRepository) {}
+
+  private teacherOnly(principal: Principal): void {
+    if (principal.user.role !== 'TEACHER') {
+      throw new ApiError(403, 'FORBIDDEN', 'Assigned teacher access is required.');
+    }
+  }
+
+  private studentOnly(principal: Principal): void {
+    if (principal.user.role !== 'STUDENT') {
+      throw new ApiError(403, 'FORBIDDEN', 'Student access is required.');
+    }
+  }
+
+  private async assignmentAccess(db: Db, principal: Principal, assignmentId: string, lock = false) {
+    const assignment = await this.repository.findAssignment(db, assignmentId);
+    if (!assignment) throw new ApiError(404, 'NOT_FOUND', 'Assignment was not found.');
+    await requireClassAccess(db, principal, assignment.class_id, lock);
+    if (!lock) return assignment;
+    const locked = await this.repository.findAssignment(db, assignmentId, true);
+    if (!locked || locked.class_id !== assignment.class_id) {
+      throw new ApiError(404, 'NOT_FOUND', 'Assignment was not found.');
+    }
+    return locked;
+  }
+
+  private async submissionAccess(db: Db, principal: Principal, submissionId: string, lock = false) {
+    if (principal.user.role === 'ADMIN') {
+      throw new ApiError(403, 'FORBIDDEN', 'Submission details are restricted to their student and assigned teachers.');
+    }
+    const submission = await this.repository.findSubmissionTarget(db, submissionId);
+    if (!submission || (principal.user.role === 'STUDENT' && submission.student_id !== principal.user.id)) {
+      throw new ApiError(404, 'NOT_FOUND', 'Submission was not found.');
+    }
+    const assignment = await this.assignmentAccess(db, principal, submission.assignment_id, lock);
+    return { submission, assignment };
+  }
+
+  private async userSummary(db: Db, userId: string): Promise<UserSummary> {
+    const user = await this.repository.userSummary(db, userId);
+    return { id: user.id, schoolCode: user.school_code, fullName: user.full_name, role: user.role };
+  }
+
+  private async gradeDto(db: Db, grade: GradeRow): Promise<Grade>;
+  private async gradeDto(db: Db, grade: GradeRow, publishedOnly: true): Promise<PublishedGrade>;
+  private async gradeDto(db: Db, grade: GradeRow, publishedOnly = false): Promise<Grade | PublishedGrade> {
+    const studentId = await this.repository.enrollmentStudentId(db, grade.enrollment_id);
+    const data: PublishedGrade = {
+      assignmentId: grade.assignment_id,
+      student: await this.userSummary(db, studentId),
+      submissionId: grade.submission_id,
+      gradedVersionNumber: grade.graded_version_number,
+      score: Number(grade.score),
+      feedback: grade.feedback,
+      status: grade.status,
+      source: grade.source,
+      publishedBy: grade.published_by ? await this.userSummary(db, grade.published_by) : null,
+      publishedAt: grade.published_at?.toISOString() ?? null,
+    };
+    if (publishedOnly) return data;
+    return { ...data, gradedBy: await this.userSummary(db, grade.graded_by),
+      gradedAt: grade.graded_at.toISOString() };
+  }
+
+  private async historyDto(db: Db, assignmentId: string, studentId: string,
+    publishedOnly: boolean): Promise<GradeHistory> {
+    const grade = await this.repository.findStudentGrade(db, assignmentId, studentId);
+    if (!grade || (publishedOnly && grade.status !== 'PUBLISHED')) {
+      throw new ApiError(404, 'NOT_FOUND', 'Published result was not found.');
+    }
+    const history = await this.repository.gradeHistory(db, grade.id, publishedOnly);
+    return {
+      assignmentId,
+      student: await this.userSummary(db, studentId),
+      items: await Promise.all(history.map(async item => ({
+        version: item.version,
+        score: Number(item.score),
+        feedback: item.feedback,
+        status: item.status,
+        source: item.source,
+        changedBy: await this.userSummary(db, item.changed_by),
+        changedAt: item.changed_at.toISOString(),
+      }))),
+    };
+  }
+
+  async getSubmissionGrade(principal: Principal, submissionId: string): Promise<Grade> {
+    this.teacherOnly(principal);
+    await this.submissionAccess(this.repository.db(), principal, submissionId);
+    const grade = await this.repository.findGradeBySubmission(this.repository.db(), submissionId);
+    if (!grade) throw new ApiError(404, 'NOT_FOUND', 'No grade exists.');
+    return this.gradeDto(this.repository.db(), grade);
+  }
+
+  async saveSubmissionGrade(principal: Principal, submissionId: string,
+    input: SaveSubmissionGradeInput): Promise<Grade> {
+    this.teacherOnly(principal);
+    return transaction(this.repository.db(), async db => {
+      const { submission, assignment } = await this.submissionAccess(db, principal, submissionId, true);
+      if (input.score > Number(assignment.max_score)) {
+        throw new ApiError(400, 'VALIDATION_ERROR', 'Score exceeds the assignment maximum.');
+      }
+      const version = await this.repository.findGradedVersion(db, submissionId);
+      if (input.gradedVersionNumber !== version) {
+        throw new ApiError(409, 'STALE_SUBMISSION_VERSION',
+          'Use the recorded graded version, or the current version for a first grade.');
+      }
+      const grade = await this.repository.saveSubmissionGrade(db, {
+        target: submission,
+        version: input.gradedVersionNumber,
+        score: input.score,
+        feedback: input.feedback ?? null,
+        feedbackProvided: input.feedback !== undefined,
+        teacherId: principal.user.id,
+      });
+      if (grade.status === 'PUBLISHED') await this.repository.notifyResult(db, grade, submission.student_id);
+      return this.gradeDto(db, grade);
+    });
+  }
+
+  async correctPublishedNoSubmissionGrade(principal: Principal, assignmentId: string, studentId: string,
+    input: CorrectPublishedNoSubmissionGradeInput): Promise<Grade> {
+    this.teacherOnly(principal);
+    return transaction(this.repository.db(), async db => {
+      const assignment = await this.assignmentAccess(db, principal, assignmentId, true);
+      if (input.score > Number(assignment.max_score)) {
+        throw new ApiError(400, 'VALIDATION_ERROR', 'Score exceeds the assignment maximum.');
+      }
+      const grade = await this.repository.correctPublishedNoSubmissionGrade(db, {
+        assignmentId,
+        studentId,
+        score: input.score,
+        feedback: input.feedback ?? null,
+        feedbackProvided: input.feedback !== undefined,
+        teacherId: principal.user.id,
+      });
+      if (!grade) throw new ApiError(404, 'NOT_FOUND', 'No Published result without a submission exists.');
+      await this.repository.notifyResult(db, grade, studentId);
+      return this.gradeDto(db, grade);
+    });
+  }
+
+  async publishAssignmentGrades(principal: Principal, assignmentId: string): Promise<AssignmentGradePublication> {
+    this.teacherOnly(principal);
+    return transaction(this.repository.db(), async db => {
+      const assignment = await this.assignmentAccess(db, principal, assignmentId, true);
+      const cohort = await this.repository.publicationCohort(db, assignment.class_id);
+      const enrollmentIds = cohort.map(enrollment => enrollment.id);
+      const blockers = await this.repository.ungradedSubmissions(db, assignmentId, enrollmentIds);
+      if (blockers.length) {
+        const error = new ApiError(409, 'UNGRADED_SUBMISSIONS',
+          'All submitted work must be graded before publication.');
+        Object.assign(error, { details: { ungradedSubmissions: await Promise.all(blockers.map(async blocker => ({
+          submissionId: blocker.id,
+          student: await this.userSummary(db, blocker.student_id),
+        }))) } });
+        throw error;
+      }
+      let automaticZeroCount = 0;
+      for (const enrollment of cohort) {
+        automaticZeroCount += await this.repository.insertAutomaticZero(db, assignmentId,
+          enrollment.id, principal.user.id);
+      }
+      await this.repository.publishDraftGrades(db, assignmentId, enrollmentIds, principal.user.id);
+      const results = await this.repository.publishedResults(db, assignmentId, enrollmentIds);
+      for (const grade of results) await this.repository.notifyResult(db, grade, grade.student_id);
+      const publishedAt = await this.repository.recordAssignmentPublication(db, assignmentId, principal.user.id);
+      return { assignmentId, publishedCount: results.length, automaticZeroCount,
+        publishedAt: publishedAt.toISOString() };
+    });
+  }
+
+  async getMyResult(principal: Principal, assignmentId: string): Promise<PublishedGrade> {
+    this.studentOnly(principal);
+    await this.assignmentAccess(this.repository.db(), principal, assignmentId);
+    const grade = await this.repository.findPublishedGrade(this.repository.db(), assignmentId, principal.user.id);
+    if (!grade) throw new ApiError(404, 'NOT_FOUND', 'Published result was not found.');
+    return this.gradeDto(this.repository.db(), grade, true);
+  }
+
+  async getMyResultHistory(principal: Principal, assignmentId: string): Promise<GradeHistory> {
+    this.studentOnly(principal);
+    await this.assignmentAccess(this.repository.db(), principal, assignmentId);
+    return this.historyDto(this.repository.db(), assignmentId, principal.user.id, true);
+  }
+
+  async getStudentResultHistory(principal: Principal, assignmentId: string,
+    studentId: string): Promise<GradeHistory> {
+    this.teacherOnly(principal);
+    await this.assignmentAccess(this.repository.db(), principal, assignmentId);
+    return this.historyDto(this.repository.db(), assignmentId, studentId, false);
+  }
 }

@@ -113,11 +113,36 @@ describe.skipIf(!target)('B1/B3 client rules and assignments/submissions',()=>{
     const a=await assignment();const s=await submit(a);expect(s.status).toBe(201);
     expect((await grade(s.body.id)).status).toBe(200);
     const blocked=await submit(a);expect(blocked.status).toBe(409);expect(blocked.body.error.code).toBe('GRADE_LOCKS_SUBMISSION');
-    const view=await api.get(`/api/assignments/${a}/my-submission`).auth(student,{type:'bearer'});
-    expect(view.body.canSubmit).toBe(false);expect(view.text).not.toContain('Feedback private');expect(view.body.grade).toBeUndefined();
-    expect((await api.get(`/api/assignments/${a}/my-result`).auth(student,{type:'bearer'})).status).toBe(404);
-    const hist=await api.get(`/api/assignments/${a}/my-result/history`).auth(student,{type:'bearer'});
-    expect(hist.status).toBe(404);expect(hist.text).not.toContain('Feedback private');
+    const studentSubmission=await api.get(`/api/assignments/${a}/my-submission`).auth(student,{type:'bearer'});
+    expect(studentSubmission.body.canSubmit).toBe(false);expect(studentSubmission.text).not.toContain('Feedback private');
+    expect(studentSubmission.body).not.toHaveProperty('grade');
+    const studentResult=await api.get(`/api/assignments/${a}/my-result`).auth(student,{type:'bearer'});
+    expect(studentResult.status).toBe(404);expect(studentResult.text).not.toContain('Feedback private');
+    const studentHistory=await api.get(`/api/assignments/${a}/my-result/history`).auth(student,{type:'bearer'});
+    expect(studentHistory.status).toBe(404);expect(studentHistory.text).not.toContain('Feedback private');
+  });
+  it('restricts grade management to an assigned teacher without revealing foreign submissions',async()=>{
+    const a=await assignment();const s=await submit(a);expect(s.status).toBe(201);
+    const saved=await grade(s.body.id);expect(saved.status).toBe(200);expect(saved.body.score).toBe(8);
+    const read=await api.get(`/api/submissions/${s.body.id}/grade`).auth(teacher,{type:'bearer'});
+    expect(read.status).toBe(200);expect(read.body).toMatchObject({submissionId:s.body.id,score:8,status:'DRAFT'});
+
+    const foreignAssignment=(await pool.query<{id:string}>(`INSERT INTO assignments(class_id,title,deadline_at,max_score,created_by)
+      VALUES ($1,'Foreign grade fixture',now()+interval '1 day',10,$2) RETURNING id`,[id.classB,id.teacher2])).rows[0]!.id;
+    const foreignSubmission=(await pool.query<{id:string}>(`INSERT INTO submissions(assignment_id,enrollment_id)
+      VALUES ($1,$2) RETURNING id`,[foreignAssignment,id.enrollment3])).rows[0]!.id;
+    await pool.query(`INSERT INTO submission_versions(submission_id,version_number,submitted_at,deadline_at_submission)
+      VALUES ($1,1,now(),now()+interval '1 day')`,[foreignSubmission]);
+    const foreignTeacher=await api.get(`/api/submissions/${foreignSubmission}/grade`).auth(teacher,{type:'bearer'});
+    expect(foreignTeacher.status).toBe(404);
+    expect((await api.put(`/api/submissions/${foreignSubmission}/grade`).auth(teacher,{type:'bearer'})
+      .send({gradedVersionNumber:1,score:8})).status).toBe(404);
+
+    for(const token of [admin,student]){
+      expect((await api.get(`/api/submissions/${s.body.id}/grade`).auth(token,{type:'bearer'})).status).toBe(403);
+      expect((await api.put(`/api/submissions/${s.body.id}/grade`).auth(token,{type:'bearer'})
+        .send({gradedVersionNumber:1,score:9})).status).toBe(403);
+    }
   });
   it('publishes nothing if any submitted work is ungraded',async()=>{
     const a=await assignment();expect((await submit(a)).status).toBe(201);
