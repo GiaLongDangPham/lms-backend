@@ -15,12 +15,12 @@ One combined spec drives the mock. The alternatives were separate endpoint lists
 | D2 representation | D1 source | Contract consequence |
 | --- | --- | --- |
 | `User`, `Class`, `TeacherAssignment`, `Enrollment` | `users`, `classes`, `class_teachers`, `enrollments` | Admin provisions accounts/classes and manages the two membership tables. Teachers have equal class rights. Login uses `schoolCode`; email is optional. Class now exposes course code and description; D1 must add them. Enrollment embeds a safe student summary. |
-| `Material`, `Assignment`, `File` | `materials`, `assignments`, `files`, three file-link tables | Upload returns private file metadata. Creation references file IDs; download must authorize against the linked parent resource. Provider, container and object key never appear in responses. |
-| `Submission` with `versions[]` | `submissions`, `submission_versions`, `submission_files` | One submission record per student and assignment; version numbers are integers, old versions are immutable, current is the highest completed version. Any Draft or Published grade locks new versions. Student responses expose the lock state but never Draft score/feedback. |
+| `Material`, `Assignment`, `File` | `materials`, `assignments`, `files`, three file-link tables | Upload returns private file metadata. Creation references file IDs; download must authorize against the linked parent resource. Provider, container and object key never appear in responses. Upload uses an explicit common-file allowlist and rejects executable, macro-enabled, extensionless and unknown file types. |
+| `Submission` with `versions[]` | `submissions`, `submission_versions`, `submission_files` | One submission record per student and assignment; version numbers are integers, old versions are immutable, current is the highest completed version. An existing submission may receive a new version only through the current deadline; extending the deadline reopens it. Any Draft or Published grade locks new versions permanently. Student responses expose the lock state but never Draft score/feedback. |
 | `Grade` / `PublishedGrade` / `GradeHistory` | `grades` plus a required new history table | A grade belongs to an assignment and student/enrollment, with an optional submission/version. This permits `AUTO_ZERO_NO_SUBMISSION`. Published corrections append immutable history. Student routes use Published-only schemas. |
 | `Notification`, `Comment` | `notifications`, `comments` | Notifications are recipient-scoped and contain no Draft grade details. Comments target exactly one assignment or submission. |
 
-The spec follows the D1 table shapes now present on this branch but does not approve D1's proposed Q04–Q10 business rules. In particular, `isLate` is a derived value from `submittedAt` and `deadlineAtSubmission`; D1 does not store a separate Late column. The backend must set server timestamps and commit each version plus file links atomically. D1 is merged into `develop`, not `main`; schema names and constraints still need final CP1 approval.
+The spec follows the D1 table shapes now present on this branch but does not approve unresolved parts of D1 Q04–Q10. `isLate` is derived from `submittedAt > deadlineAtSubmission`; equality is on time. `submittedAt` is the server-side completion time that becomes effective only when the version and all file links commit successfully. Existing versions keep their deadline snapshot when a teacher edits the assignment deadline. D1 is merged into `develop`, not `main`; schema names and constraints still need final review.
 
 ## Mock and validation
 
@@ -45,18 +45,25 @@ The mock returns deterministic schema examples for success and declared errors. 
 ## Approved rules from Client Log #18–#20
 
 1. Once a Draft or Published grade exists, the student cannot submit another version. Submission returns `409 GRADE_LOCKS_SUBMISSION`; `my-submission` exposes `canSubmit` and `lockedReason` without exposing Draft grade data.
-2. Teachers may correct a Published grade. The correction stays visible as Published and appends an immutable revision containing score, feedback, actor and timestamp. Both teacher and student history endpoints are defined; student history includes only Published revisions.
+2. Teachers may correct a Published grade. Every successful grade create or change, including Draft changes, appends an immutable revision containing score, feedback, status, actor and timestamp. Teacher history returns all revisions; student history includes only Published revisions.
 3. Publication is assignment-wide and atomic. Every submitted assignment must have a current grade or publication returns `409 UNGRADED_SUBMISSIONS` and publishes nothing. The successful transaction publishes all current grades and creates Published score-0 results for active enrolled students without submissions.
 4. Student result lookup is assignment-based, not submission-based, so an automatic zero can be returned with null `submissionId` and `gradedVersionNumber`.
 
+## Approved submission, deadline, score and file rules — 24/10/2026
+
+1. A first submission may be late. After a student has a submission, another version is accepted only when its successful server-side commit time is at or before the assignment's current deadline. After that boundary the API returns `409 DEADLINE_LOCKS_RESUBMISSION`; extending the deadline into the future reopens resubmission for an ungraded student.
+2. A teacher may move the deadline earlier or later after submissions exist. This changes only future admission checks; every existing version keeps its `deadlineAtSubmission` and historical Late result.
+3. Scores and `maxScore` allow at most two decimal places and remain constrained by `0 <= score <= maxScore`.
+4. Publication remains assignment-wide and atomic, matching the UI and R1 scenario.
+5. The initial upload allowlist covers common documents, spreadsheets, slides, plain data/text, source code, images and `.zip`. Examples include `.docx`, `.xls`, `.cpp` and `.py`. Source code is stored inertly and never executed. Executables, direct system scripts, macro-enabled Office files, extensionless files, unknown extensions, `.rar`, `.7z`, and files whose detected content conflicts with their extension/MIME type are rejected.
+6. Each file is at most 25 MiB. A resource or submission version has at most 10 distinct files; a submission version is also capped at 100 MiB total.
+7. ZIP inspection rejects more than 100 entries, expanded content above 200 MiB, expansion ratios above 20:1, nested archives, symlinks, absolute/parent traversal paths and denied file types inside the archive.
+8. Files live in private S3-compatible object storage. New uploads are actor-owned `PENDING` records; attaching to exactly one resource changes them to `ATTACHED` in the resource transaction. A cleanup job removes unattached files after 24 hours and retries failed object deletions from `DELETE_PENDING`. Attached historical files are never removed by orphan cleanup.
+
 ## Remaining decisions before B3/B4
 
-The following choices remain open from Client Log #4–#6 and D1 Q05–Q08. The recommendations are proposals for Kha/Long/Nam to approve, not implemented behavior.
+The submission, deadline, precision, file-limit, ZIP inspection, storage and orphan-cleanup choices are approved. Provider credentials, bucket/container names and signed-URL duration remain environment configuration rather than public contract decisions.
 
-1. **Late repeat submission:** A first submission after deadline is allowed and marked Late. If a student already submitted before the deadline, may they replace it afterward? Recommend rejecting the replacement until the teacher explicitly extends the assignment; alternative is allowing every later version as Late. D1 can represent either.
-2. **Deadline boundary and edits:** Recommend server completion time, `submittedAt <= deadlineAtSubmission` as on time, and a historical deadline snapshot so later edits do not rewrite Late status. Alternative: use upload start time or recompute old Late values against the edited deadline. This affects B3 and D1 Q07.
-3. **Score precision:** `0 <= score <= assignment.maxScore` is fixed; exact decimal precision remains to be approved.
+No unpublish endpoint is included. Unpublish would withdraw an already Published result back to a hidden/Draft state, making the current official result temporarily unavailable to students; that behavior is explicitly outside the MVP. Corrections instead remain Published and append history. The assignment-wide publication endpoint is part of D2. D1 must be updated with grade identity/source, complete history storage and file lifecycle state before B4; behavior tests must cover deadline boundaries and reopening, transaction rollback, automatic zeroes, ownership, corrections, two-decimal validation, Draft privacy, file limits, ZIP abuse and orphan cleanup.
 
-No unpublish endpoint is included. The assignment-wide publication endpoint is now part of D2. D1 must be updated with grade identity/source and history storage before B4; behavior tests must cover transaction rollback, automatic zeroes, ownership, corrections, and Draft privacy.
-
-Other CP1 items remain open but do not change the five decisions above: authentication transport, account credential issuance and CSV import, class-code uniqueness, file MIME/size limits and orphan cleanup, comment visibility, and account/enrollment deactivation. These are marked with `x-decision-pending` on their operations or in D1's decision list. Their current shapes are review proposals.
+Other review items remain open but do not change the decisions above: authentication transport, account credential issuance and CSV import, class-code uniqueness, comment visibility, and account/enrollment deactivation. These are marked with `x-decision-pending` on their operations or in D1's decision list. Their current shapes are review proposals.

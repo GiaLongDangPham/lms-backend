@@ -57,9 +57,11 @@ hosting ở kickoff/S1; cần lưu file bền vững sau redeploy. Chưa có c�
 
 - 3 role Admin/GV/SV; tài khoản được cấp sẵn, không tự đăng ký.
 - Admin tạo lớp, phân công GV, ghi danh SV. Một lớp nhiều GV có quyền ngang nhau.
-- Nộp lại trước deadline, giữ lịch sử, bản mới nhất hiện hành; cho nộp trễ đánh dấu Late.
+- Giữ lịch sử version, bản mới nhất là hiện hành. Lần nộp đầu có thể Late; khi đã có bài nộp, chỉ được tạo version mới đến deadline hiện tại, trừ khi GV gia hạn. Có Grade kể cả Draft thì khóa nộp vĩnh viễn.
 - Một lần nộp có thể nhiều file: thiết kế file attachment và phiên bản bài nộp ở D1.
-- Điểm/feedback chỉ gửi cho SV sau Publish; bắt buộc kiểm soát ở API.
+- File tối đa 25 MiB; tối đa 10 file/resource hoặc version và 100 MiB/version. Chỉ ZIP trong nhóm archive; kiểm tra MIME/nội dung, path traversal, zip bomb và file cấm. Dùng private S3-compatible storage; upload PENDING quá 24 giờ được cleanup, file lịch sử ATTACHED không bị dọn.
+- Thời điểm nộp là giờ server khi version và toàn bộ file links commit thành công; sửa deadline không viết lại snapshot/Late của lịch sử.
+- Điểm tối đa hai chữ số thập phân. Công bố nguyên bài tập trong một transaction; tự gán 0 cho SV không nộp. Lưu mọi revision điểm, nhưng Draft không bao giờ gửi cho SV.
 - Nam cần seed lớp/user/ghi danh để làm B3 trước khi B1 hoàn thành.
 - Increment 1: Tài khoản & Lớp, Nội dung, Nộp bài, Chấm & Công bố. Increment 2:
   Thông báo và Comment. Email/trắc nghiệm chỉ bổ sung khi còn nguồn lực.

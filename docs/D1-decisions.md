@@ -26,10 +26,10 @@ Session/token thuộc B1, chưa triển khai. Seed dùng hash scrypt thật, có
 
 | Mã | Câu hỏi cần trả lời đầy đủ | Đề xuất để nhóm review | Mốc |
 | --- | --- | --- | --- |
-| Q05 | Thang điểm 10/100 hay max_score theo bài? Độ chính xác? Publish từng SV hay cả bài? Sửa điểm Published có quay Draft không, có thu hồi không? | max_score theo bài, numeric; lưu trạng thái từng hồ sơ, thao tác công bố cả bài có thể cập nhật nhiều hồ sơ trong transaction. Khi sửa kết quả đã công bố thì quay Draft, phải Publish lại. | Thiết kế CP1; Nam/Kha chốt rule trước B4 |
-| Q06 | Có cho nộp lại sau deadline khi đã có bài? Có cho nộp lại sau chấm/Publish? Khi nộp lại thì giữ, ẩn hay reset điểm cũ? | Giữ hồ sơ + version bất biến; Grade chỉ rõ version được chấm. Phần quyền nộp lại/điểm cần Kha xác nhận, không tự chọn đáp án thay khách hàng. | CP2 ngày 16/10, trước Nam code B3 |
-| Q07 | Đúng deadline có Late không? Giờ nhận bài là khi upload xong hay lúc bắt đầu? Sửa deadline có đổi trạng thái bài cũ không? | Dùng giờ server lúc hoàn tất; đúng deadline coi đúng hạn; snapshot deadline mỗi lần nộp để lịch sử không đổi khi GV sửa deadline. Cả ba là đề xuất cần duyệt. | CP1 thống nhất trường; CP2 chốt rule |
-| Q08 | File nào được phép, tối đa bao nhiêu file/MB? Đề bài có file? Một object có được dùng chung? Xóa file xử lý thế nào? | Mỗi upload một object riêng, metadata + bảng nối; private storage; backend kiểm tra quyền theo đối tượng cha. PDF/Word/PowerPoint/file nén là yêu cầu; extension cụ thể, ảnh và các giới hạn còn chưa chốt. | Trước migration file/triển khai B2/B3 |
+| Q05 | Thang điểm 10/100 hay max_score theo bài? Độ chính xác? Publish từng SV hay cả bài? Sửa điểm Published có quay Draft không, có thu hồi không? | Đã chốt max_score theo bài; điểm tối đa hai chữ số thập phân; công bố toàn bài tập trong một transaction. Mọi lần tạo/sửa điểm đều lưu history. Sửa điểm Published giữ Published và ghi revision mới. Không có unpublish cho tới khi được yêu cầu riêng. | Chốt 24/10/2026; đồng bộ D2 và migration mới trước B4 |
+| Q06 | Có cho nộp lại sau deadline khi đã có bài? Có cho nộp lại sau chấm/Publish? Khi nộp lại thì giữ, ẩn hay reset điểm cũ? | Giữ version bất biến. Bài đã có Grade, kể cả Draft, không được nộp lại. Nếu đã có submission thì chỉ tạo version mới đến deadline hiện tại; quá hạn phải chờ GV gia hạn. Lần nộp đầu vẫn có thể Late. | Client Log #18 + chốt bổ sung 24/10/2026 |
+| Q07 | Đúng deadline có Late không? Giờ nhận bài là khi upload xong hay lúc bắt đầu? Sửa deadline có đổi trạng thái bài cũ không? | Đúng deadline là đúng hạn. submitted_at là giờ server khi transaction version + file links commit thành công. GV được sửa deadline dù đã có submission; bản cũ giữ snapshot và Late lịch sử, deadline mới chỉ chi phối lần nộp tương lai. | Chốt 24/10/2026 |
+| Q08 | File nào được phép, tối đa bao nhiêu file/MB? Đề bài có file? Một object có được dùng chung? Xóa file xử lý thế nào? | Allowlist tài liệu, bảng tính, slide, text/data, source, ảnh và ZIP; `.docx`, `.xls`, `.cpp`, `.py` được phép. Chặn executable, system script, Office macro, file không đuôi/đuôi lạ, `.rar`, `.7z` và MIME/nội dung không khớp. 25 MiB/file; 10 file/resource hoặc version; 100 MiB/version. ZIP tối đa 100 entry, 200 MiB giải nén, tỷ lệ 20:1; chặn archive lồng, symlink, path traversal và file cấm bên trong. Private S3-compatible storage; PENDING → ATTACHED, orphan PENDING sau 24 giờ, DELETE_PENDING để retry. | Chốt 24/10/2026; cần migration mới trước B2/B3 |
 | Q09 | Comment trên bài tập ai xem? Comment trên bài nộp/kết quả có riêng tư không? Nhắc deadline trước bao lâu và gửi lại thế nào? | Comment bài tập cho thành viên lớp; comment hồ sơ chỉ SV chủ bài + GV của lớp; chưa thread/realtime. Không nhúng điểm Draft trong notification. Giờ nhắc do nhóm chốt ở B5. | Target comment tại CP1; quyền/rule trước B5/B6 |
 | Q10 | Xóa/vô hiệu hóa user/lớp/enrollment thế nào khi đã có bài nộp/điểm? Thôi học rồi ghi danh lại có giữ lịch sử không? | Vô hiệu hóa/archiving để giữ lịch sử; chặn hard-delete cha còn dữ liệu; chỉ cascade bảng nối khi xóa cha được cho phép. Quyền xem sau thôi học cần Kha chốt riêng. | Trước migration và B1 |
 
@@ -43,23 +43,24 @@ Chỉ ghi các quyết định Long đã xác nhận; phần còn mở cần bi�
 | Q02 | UUID cho khóa đơn; khóa ghép cho bảng nối/phiên bản | Long | 11/10/2026 | Cuộc trao đổi khởi động D1 | UUID DEFAULT gen_random_uuid; Nam cập nhật OpenAPI |
 | Q03 | SQL có phiên bản, runner dùng pg | Long | 11/10/2026 | Cuộc trao đổi khởi động D1 | checksum SHA-256, transaction từng migration, advisory lock, CI kiểm tra DB |
 | Q04 | Chưa chốt | — | — | — | role, class uniqueness |
-| Q05 | Chưa chốt | — | — | — | assignments, grades |
-| Q06 | Chưa chốt | — | — | — | submissions, versions, grades |
-| Q07 | Chưa chốt | — | — | — | deadline snapshot, timestamp |
-| Q08 | Chưa chốt | — | — | — | files, attachments |
+| Q05 | Chốt một phần; unpublish chưa yêu cầu | Nhóm | 24/10/2026 | Trao đổi cập nhật specification | assignments, grades, grade history |
+| Q06 | Đã chốt | Nhóm | 24/10/2026 | Client Log #18 + trao đổi cập nhật specification | submissions, versions, grades |
+| Q07 | Đã chốt | Nhóm | 24/10/2026 | Trao đổi cập nhật specification | deadline snapshot, timestamp |
+| Q08 | Đã chốt | Nhóm | 24/10/2026 | Trao đổi cập nhật specification | files, lifecycle, attachments |
 | Q09 | Chưa chốt | — | — | — | comments, notifications |
 | Q10 | Chưa chốt | — | — | — | FK delete rules, activation |
 
 ## Phạm vi implementation local trước review
 
 - `0001` hiện dùng một role/tài khoản, code + term cho lớp, max_score theo bài,
-  snapshot deadline và hai target comment như ERD. Đây là lựa chọn cho bản nháp local,
-  không xác nhận các quy tắc Q04–Q10 thay Kha/Nam.
+  snapshot deadline và hai target comment như ERD. Q05–Q08 đã có quyết định mới nhưng
+  migration đã áp dụng này vẫn phản ánh thiết kế cũ; phải thêm migration mới, không sửa `0001`.
 - FK dùng RESTRICT để không tự xóa dây chuyền lịch sử. Chưa có chức năng archive,
   xóa dữ liệu qua API hoặc chính sách truy cập sau thôi học.
 - Có CHECK trạng thái công bố, trigger chặn nộp chéo lớp và điểm vượt max_score;
   không tự reset điểm khi nộp lại hoặc tự đổi Published về Draft khi sửa điểm.
-- Không có rule đóng cửa nộp sau deadline, xử lý Late hiển thị, giới hạn file,
-  quyền comment hay lịch nhắc deadline; các phần này phải chốt trước module tương ứng.
+- `0001` chưa cưỡng chế cửa sổ nộp lại, precision hai chữ số, grade history, automatic
+  zero hoặc allowlist file; service và migration kế tiếp phải thực thi các quyết định đó.
+  Quyền comment và lịch nhắc deadline vẫn phải chốt trước module tương ứng.
 - Khi đổi schema sau khi đã áp dụng `0001`, tạo migration tiếp theo; không sửa file
   đã áp dụng để làm cho history/checksum mất nhất quán.
