@@ -165,8 +165,12 @@ try {
   });
   await check('grade and attachment foreign keys identify the exact submission version', async () => {
     await rejectSql('UPDATE grades SET graded_version_number = 2 WHERE submission_id = $1', [id.submission2], '23514');
+    const pendingFile = '70000000-0000-4000-8000-000000000009';
+    await pool.query(`INSERT INTO files(id,storage_provider,storage_container,object_key,
+      original_name,mime_type,size_bytes,uploaded_by) VALUES($1,'fixture','test','missing-version',
+      'missing.pdf','application/pdf',128,$2)`, [pendingFile,id.student2]);
     await rejectSql('INSERT INTO submission_files VALUES ($1, 2, $2)',
-      [id.submission2, '70000000-0000-4000-8000-000000000006'], '23503');
+      [id.submission2, pendingFile], '23503');
   });
   await check('invalid, non-finite and excessive grades are rejected; max-score edits keep existing grades valid', async () => {
     for (const score of ['-1', '11', 'NaN', 'Infinity']) {
