@@ -61,4 +61,4 @@ Concern: the usual `npm run check` wrapper and repository-wide ESLint invocation
 
 ## Commit
 
-`d0f6fd9` — `feat(enrollments): backfill published assignment results`.
+Implementation commit: `1aec96b` — `feat(enrollments): backfill published assignment results`.
