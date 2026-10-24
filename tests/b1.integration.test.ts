@@ -188,6 +188,8 @@ describe.skipIf(!testUrl)('B1 PostgreSQL API and D2 response compatibility', () 
     const path = `/api/classes/${id.classA}/enrollments/${id.enrollment1}`;
     const disabled = await api.patch(path).auth(admin.token, { type: 'bearer' }).send({ isActive: false });
     expect(disabled.status).toBe(200); contract('/classes/{classId}/enrollments/{enrollmentId}', 'patch', 200, disabled.body);
+    expect(disabled.body.student).toEqual({ id: student.user.id, schoolCode: student.user.schoolCode,
+      fullName: student.user.fullName, role: 'STUDENT' });
     expect((await api.get(`/api/classes/${id.classA}`).auth(student.token, { type: 'bearer' })).status).toBe(404);
     expect((await api.get(`/api/classes/${id.classA}/enrollments`).auth(teacher.token, { type: 'bearer' })).status).toBe(200);
     expect((await pool.query('SELECT id FROM submissions WHERE enrollment_id = $1', [id.enrollment1])).rowCount).toBe(2);
@@ -195,6 +197,8 @@ describe.skipIf(!testUrl)('B1 PostgreSQL API and D2 response compatibility', () 
     const re = await api.post(`/api/classes/${id.classA}/enrollments`).auth(admin.token, { type: 'bearer' }).send({ studentId: id.student1 });
     expect(re.status).toBe(201); expect(re.body.id).toBe(id.enrollment1);
     contract('/classes/{classId}/enrollments', 'post', 201, re.body);
+    expect(re.body.student).toEqual({ id: student.user.id, schoolCode: student.user.schoolCode,
+      fullName: student.user.fullName, role: 'STUDENT' });
     expect((await api.get(`/api/classes/${id.classA}`).auth(student.token, { type: 'bearer' })).status).toBe(200);
   });
   it('rotates refresh cookies, requires trusted Origin, and revokes a replayed token family', async () => {

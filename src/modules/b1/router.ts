@@ -19,7 +19,7 @@ const updateClass = createClass.partial().refine(v => Object.keys(v).length > 0)
 export function createB1Router(pool: pg.Pool, config: AuthConfig, enrollmentService: EnrollmentService, loginLimit = 10) {
   const router = Router();
   const auth = createAuth(pool, config);
-  async function enrollmentResponse(row: EnrollmentRow) {
+  async function rosterEnrollmentResponse(row: EnrollmentRow) {
     const result=await pool.query<User>(`SELECT ${userColumns} FROM users WHERE id=$1`,[row.student_id]);
     const u=result.rows[0]!;
     return {...enrollmentDto(row),student:{id:u.id,schoolCode:u.school_code,fullName:u.full_name,role:u.role}};
@@ -173,19 +173,19 @@ export function createB1Router(pool: pg.Pool, config: AuthConfig, enrollmentServ
     const rows = await pool.query<EnrollmentRow>(`SELECT * FROM enrollments WHERE class_id = $1
       AND ($2::uuid IS NULL OR id > $2) ORDER BY id LIMIT $3`, [id, cursorId(query.cursor, scope), query.limit + 1]);
     const response=page(rows.rows, query.limit, scope, row=>row);
-    res.json({...response,items:await Promise.all(rows.rows.slice(0,query.limit).map(enrollmentResponse))});
+    res.json({...response,items:await Promise.all(rows.rows.slice(0,query.limit).map(rosterEnrollmentResponse))});
   });
   router.post('/classes/:id/enrollments', requireAdmin, async (req, res) => {
     const id = parse(uuid, req.params.id);
     const body = parse(z.object({ studentId: uuid }).strict(), req.body);
     const result = await enrollmentService.enroll(getPrincipal(req), id, body.studentId);
-    res.status(201).json(await enrollmentResponse(result));
+    res.status(201).json(await enrollmentService.response(result));
   });
   router.patch('/classes/:id/enrollments/:enrollmentId', requireAdmin, async (req, res) => {
     const id = parse(uuid, req.params.id); const enrollmentId = parse(uuid, req.params.enrollmentId);
     const body = parse(z.object({ isActive: z.boolean() }).strict(), req.body);
     const result = await enrollmentService.setActive(getPrincipal(req), id, enrollmentId, body.isActive);
-    res.json(await enrollmentResponse(result));
+    res.json(await enrollmentService.response(result));
   });
   return router;
 }

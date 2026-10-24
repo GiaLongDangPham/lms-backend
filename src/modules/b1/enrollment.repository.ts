@@ -1,6 +1,13 @@
 import type pg from 'pg';
 import { userColumns, type EnrollmentRow, type User } from './common.js';
 
+export interface EnrollmentStudentSummary {
+  id: string;
+  school_code: string;
+  full_name: string;
+  role: User['role'];
+}
+
 export class EnrollmentRepository {
   constructor(private readonly pool: pg.Pool) {}
 
@@ -13,6 +20,11 @@ export class EnrollmentRepository {
 
   async findActiveStudent(db: pg.PoolClient, studentId: string): Promise<User | undefined> {
     return (await db.query<User>(`SELECT ${userColumns} FROM users WHERE id=$1 FOR SHARE`, [studentId])).rows[0];
+  }
+
+  async findEnrollmentStudentSummary(db: pg.Pool | pg.PoolClient, studentId: string) {
+    return (await db.query<EnrollmentStudentSummary>(`SELECT id,school_code,full_name,role
+      FROM users WHERE id=$1`, [studentId])).rows[0];
   }
 
   async upsertEnrollment(db: pg.PoolClient, classId: string, studentId: string, enrolledBy: string) {

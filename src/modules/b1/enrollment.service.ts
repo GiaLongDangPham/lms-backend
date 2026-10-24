@@ -1,5 +1,5 @@
 import type { Principal } from './auth.js';
-import { ApiError, transaction, type EnrollmentRow } from './common.js';
+import { ApiError, enrollmentDto, transaction, type EnrollmentRow } from './common.js';
 import { EnrollmentRepository } from './enrollment.repository.js';
 import type { PublishedResultBackfill } from '../assessment/service.js';
 
@@ -53,5 +53,12 @@ export class EnrollmentService {
       if (isActive) await this.backfill.backfillPublishedResultsForEnrollment(db, classId, enrollmentId);
       return updated!;
     });
+  }
+
+  async response(row: EnrollmentRow) {
+    const student = await this.repository.findEnrollmentStudentSummary(this.repository.db(), row.student_id);
+    if (!student) throw new ApiError(404, 'NOT_FOUND', 'Student was not found.');
+    return { ...enrollmentDto(row), student: { id: student.id, schoolCode: student.school_code,
+      fullName: student.full_name, role: student.role } };
   }
 }
