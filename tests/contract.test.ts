@@ -20,9 +20,11 @@ describe('D2 OpenAPI contract', () => {
   });
   it('documents published zeroes for enrollments without expanding the public API', () => {
     const spec = JSON.parse(readFileSync('docs/openapi.json', 'utf8'));
-    const operations = Object.values(spec.paths).flatMap((path: any) =>
-      Object.values(path).filter((operation: any) => operation.operationId),
-    ) as Array<{ operationId: string; description?: string }>;
+    const paths = spec.paths as Record<string, Record<string, { operationId?: string; description?: string }>>;
+    const operations = Object.values(paths).flatMap((path) =>
+      Object.values(path).filter((operation): operation is { operationId: string; description?: string } =>
+        typeof operation.operationId === 'string'),
+    );
     expect(operations).toHaveLength(48);
     const descriptions = Object.fromEntries(
       operations.map(({ operationId, description }) => [operationId, description ?? '']),
