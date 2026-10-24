@@ -1,8 +1,8 @@
 # D1 · Quyết định đã chốt và còn mở
 
-Ngày soạn/cập nhật: 11/10/2026. **Long đã chốt mã trường để đăng nhập, UUID cho ID
-và migration SQL có phiên bản dùng pg** trong cuộc trao đổi này. Các quyết định
-nghiệp vụ còn mở chưa được coi là duyệt tại CP1/CP2.
+Cập nhật: 24/10/2026. Long đã chốt mã trường để đăng nhập, UUID, migration SQL có
+phiên bản dùng pg và mô hình lớp ở L20. Nhóm đã chốt thêm Q05-Q08 cho bài tập, bài
+nộp, điểm và file. Các phần khác vẫn chờ duyệt.
 
 Thiết kế để review: [database-design.md](database-design.md) và
 [database-erd.md](database-erd.md). Kha ghi quyết định nghiệp vụ vào Client Log/biên
@@ -15,12 +15,11 @@ bản; Nam cập nhật OpenAPI; Long cập nhật schema. Không cần gửi th
 | Q01 | Đăng nhập bằng mã SV/GV hay email? Email có bắt buộc và duy nhất không? Admin tạo sẵn hay import CSV bắt buộc MVP? | Dùng mã trường làm username; email là liên hệ. Tạo qua Admin/seed trước; CSV chỉ làm khi xác nhận bắt buộc. | Long/Nam + Kha xác nhận yêu cầu trước B1; uniqueness chốt trước migration |
 | Q02 | Dùng UUID hay số tự tăng? API của Nam đang mô tả loại nào? | Đã chọn UUID cho khóa đơn, khóa ghép cho bảng nối; version là integer. | Long đã chốt; Nam đồng bộ D2 |
 | Q03 | Chạy migration bằng SQL có phiên bản trên driver pg hiện có, hay dùng ORM như Prisma? | Đã chọn SQL + pg; runner lưu lịch sử, checksum, transaction và chống chạy đồng thời. | Long đã chốt; Nam dùng cùng lệnh |
-| Q04 | Một tài khoản chỉ một role? Mã lớp có trùng giữa hai học kỳ không? | Một role/tài khoản; lớp unique theo code + term. Đây là đề xuất, không phải Client Log đã chốt. | Long/Nam, Kha xác nhận nghiệp vụ trước CP1 |
+| Q04 | Một tài khoản chỉ một role? Mã lớp có trùng giữa học phần/học kỳ không? | Một role/tài khoản trong MVP; L20 chốt lớp unique theo course_code + code + term, description nullable. | Long chốt L20 ngày 17/10/2026 |
 
 Q01 (trường đăng nhập), Q02 và Q03 đã được dùng trong `0001_initial_schema.sql`.
-Email hiện là liên hệ tùy chọn, không UNIQUE; import CSV và Q04 vẫn cần review.
-Session/token thuộc B1, chưa triển khai. Seed dùng hash scrypt thật, có thể dùng
-`verifyPassword` khi viết B1; chưa có API đăng nhập.
+Email hiện là liên hệ tùy chọn, không UNIQUE; import CSV vẫn cần review. `0002` và
+B1 triển khai JWT access token, refresh session, đổi mật khẩu và thu hồi session.
 
 ## Chốt luồng nộp/chấm và các điểm ảnh hưởng schema
 
@@ -33,6 +32,9 @@ Session/token thuộc B1, chưa triển khai. Seed dùng hash scrypt thật, có
 | Q09 | Comment trên bài tập ai xem? Comment trên bài nộp/kết quả có riêng tư không? Nhắc deadline trước bao lâu và gửi lại thế nào? | Comment bài tập cho thành viên lớp; comment hồ sơ chỉ SV chủ bài + GV của lớp; chưa thread/realtime. Không nhúng điểm Draft trong notification. Giờ nhắc do nhóm chốt ở B5. | Target comment tại CP1; quyền/rule trước B5/B6 |
 | Q10 | Xóa/vô hiệu hóa user/lớp/enrollment thế nào khi đã có bài nộp/điểm? Thôi học rồi ghi danh lại có giữ lịch sử không? | Vô hiệu hóa/archiving để giữ lịch sử; chặn hard-delete cha còn dữ liệu; chỉ cascade bảng nối khi xóa cha được cho phép. Quyền xem sau thôi học cần Kha chốt riêng. | Trước migration và B1 |
 
+L05 về ghi chú gửi giảng viên chưa được Kha chốt. B3 không expose `note` trong public
+API; cột nullable do migration cũ tạo ra không được dùng làm hợp đồng cho frontend.
+
 ## Nhật ký quyết định
 
 Chỉ ghi các quyết định Long đã xác nhận; phần còn mở cần biên bản/spec của nhóm.
@@ -42,25 +44,22 @@ Chỉ ghi các quyết định Long đã xác nhận; phần còn mở cần bi�
 | Q01 | Mã trường đăng nhập; email để liên hệ. CSV/chính sách tài khoản còn mở. | Long | 11/10/2026 | Cuộc trao đổi khởi động D1 | school_code chuẩn hóa trim + uppercase và UNIQUE; email nullable, không UNIQUE |
 | Q02 | UUID cho khóa đơn; khóa ghép cho bảng nối/phiên bản | Long | 11/10/2026 | Cuộc trao đổi khởi động D1 | UUID DEFAULT gen_random_uuid; Nam cập nhật OpenAPI |
 | Q03 | SQL có phiên bản, runner dùng pg | Long | 11/10/2026 | Cuộc trao đổi khởi động D1 | checksum SHA-256, transaction từng migration, advisory lock, CI kiểm tra DB |
-| Q04 | Chưa chốt | — | — | — | role, class uniqueness |
+| Q04 | UNIQUE(course_code, code, term), description nullable | Long | 17/10/2026 | MaTran_Lech L20 | classes; mapping bắt buộc cho lớp cũ |
 | Q05 | Chốt một phần; unpublish chưa yêu cầu | Nhóm | 24/10/2026 | Trao đổi cập nhật specification | assignments, grades, grade history |
 | Q06 | Đã chốt | Nhóm | 24/10/2026 | Client Log #18 + trao đổi cập nhật specification | submissions, versions, grades |
 | Q07 | Đã chốt | Nhóm | 24/10/2026 | Trao đổi cập nhật specification | deadline snapshot, timestamp |
 | Q08 | Đã chốt | Nhóm | 24/10/2026 | Trao đổi cập nhật specification | files, lifecycle, attachments |
 | Q09 | Chưa chốt | — | — | — | comments, notifications |
-| Q10 | Chưa chốt | — | — | — | FK delete rules, activation |
+| Q10 | Vô hiệu hóa user/ghi danh và ghi danh lại giữ enrollment ID; archive lớp còn mở | Long | 14/10/2026 | Trao đổi B1 | session revocation, FK giữ lịch sử |
 
 ## Phạm vi implementation local trước review
 
-- `0001` hiện dùng một role/tài khoản, code + term cho lớp, max_score theo bài,
-  snapshot deadline và hai target comment như ERD. Q05–Q08 đã có quyết định mới nhưng
-  migration đã áp dụng này vẫn phản ánh thiết kế cũ; phải thêm migration mới, không sửa `0001`.
-- FK dùng RESTRICT để không tự xóa dây chuyền lịch sử. Chưa có chức năng archive,
-  xóa dữ liệu qua API hoặc chính sách truy cập sau thôi học.
-- Có CHECK trạng thái công bố, trigger chặn nộp chéo lớp và điểm vượt max_score;
-  không tự reset điểm khi nộp lại hoặc tự đổi Published về Draft khi sửa điểm.
-- `0001` chưa cưỡng chế cửa sổ nộp lại, precision hai chữ số, grade history, automatic
-  zero hoặc allowlist file; service và migration kế tiếp phải thực thi các quyết định đó.
-  Quyền comment và lịch nhắc deadline vẫn phải chốt trước module tương ứng.
+- `0001` giữ nguyên checksum; `0002` thêm auth; `0003` thêm course_code/description,
+  grade history, automatic zero và publication theo bài. Migration B3 tiếp theo bổ
+  sung precision, lifecycle file và invariant deadline/file còn thiếu.
+- FK dùng RESTRICT để không tự xóa dây chuyền lịch sử. B1 có API vô hiệu hóa tài
+  khoản/ghi danh; chưa có archive lớp hoặc hard-delete qua API.
+- `0003` chưa cưỡng chế cửa sổ nộp lại, precision hai chữ số hoặc lifecycle file;
+  service và migration B3 phải thực thi các quyết định Q05-Q08.
 - Khi đổi schema sau khi đã áp dụng `0001`, tạo migration tiếp theo; không sửa file
   đã áp dụng để làm cho history/checksum mất nhất quán.

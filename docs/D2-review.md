@@ -1,6 +1,9 @@
 # D2 API contract and mock — review draft
 
-**Status:** Updated for Client Log #18–#20 on 16/10/2026. Nam owns D2. The current source is [openapi.json](openapi.json); it defines 40 operations across six project modules. Long must reconcile the new grade identity/history contract with D1 before B4 implementation. The mock is a static frontend aid, not proof that B1–B6 exist.
+**Status:** Integrated through 24/10/2026. The current source is
+[openapi.json](openapi.json); it combines the B1 JWT/account/class extensions with
+the approved assignment, submission, grade-history, publication, precision and file
+rules. The mock is a static frontend aid, not proof that every module is implemented.
 
 ## Current situation and recommendation
 

@@ -1,8 +1,11 @@
 # Migration SQL · D1
 
-Long đã chọn SQL có phiên bản dùng pg. `0001_initial_schema.sql` tạo 15 bảng nghiệp
-vụ theo [ERD nháp](../../docs/database-erd.md). Chưa duyệt CP1; còn các câu hỏi trong
-[D1-decisions.md](../../docs/D1-decisions.md).
+Long đã chọn SQL có phiên bản dùng pg. `0001` tạo 15 bảng nghiệp vụ; `0002` thêm
+hai bảng auth và trường đổi mật khẩu. `0003_client_rules.sql` thêm lịch sử điểm,
+định danh kết quả theo bài tập/ghi danh, điểm tự động khi không nộp, cột note nội bộ
+và mã học phần. `0004_b3_assignments_submissions.sql` áp dụng precision hai chữ số,
+lifecycle file và giới hạn attachment cho B3. [ERD](../../docs/database-erd.md) hiện có 18 bảng, chưa tính
+`schema_migrations`. Các rule còn mở nằm trong [D1-decisions.md](../../docs/D1-decisions.md).
 
 ## Chạy local
 
@@ -23,12 +26,12 @@ không dùng seed này để tự đưa tài khoản demo lên staging.
 
 - Đọc các file `NNNN_mo_ta.sql` theo thứ tự. Không dùng trùng số phiên bản.
 - Lưu tên file, SHA-256 và thời điểm áp dụng trong `schema_migrations` (bảng hạ tầng
-  ngoài 15 bảng nghiệp vụ).
+  ngoài 18 bảng nghiệp vụ/auth).
 - Mỗi file chạy trong một transaction; lỗi SQL rollback cả DDL và bản ghi lịch sử.
 - Advisory lock trên một connection bảo đảm không chạy seed/migration đồng thời.
   Lock đang bận thì lệnh thất bại, không chờ vô hạn.
 - File đã áp dụng phải còn trong repo, cùng checksum và cùng thứ tự. Không sửa
-  `0001` sau khi áp dụng; bổ sung `0002_...sql` để thay đổi schema.
+  file sau khi áp dụng; bổ sung migration có số tiếp theo để thay đổi schema.
 - SQL trong file không tự BEGIN/COMMIT, không dùng lệnh không chạy được trong
   transaction như CREATE INDEX CONCURRENTLY. Runner hiện dành cho migration transactional.
 - Lock timeout 10 giây; statement timeout 60 giây. Migration dữ liệu lớn sau này
@@ -41,6 +44,23 @@ không gọi lệnh tsx sau khi chỉ cài production dependencies. CI đã cài
 Nếu migrate thất bại, sửa lỗi ở **file chưa được áp dụng** rồi chạy lại. Nếu file
 đã được áp dụng, tạo migration mới. Các migration trước đó vẫn được giữ nếu file
 sau lỗi; transaction là từng file, không phải toàn bộ một đợt deploy.
+
+## Nâng cấp 0003 trên dữ liệu có sẵn
+
+Sao lưu DB trước khi nâng cấp môi trường dùng chung. Hai lớp demo đúng ID/mã fixture
+được gán DEMO-COURSE-A/B. Lớp khác phải có mã học phần thực tế do nhóm xác nhận:
+
+```powershell
+$env:CLASS_COURSE_MAPPING='{"UUID-CUA-LOP":"CO2013"}'
+npm run db:migrate
+Remove-Item Env:CLASS_COURSE_MAPPING
+```
+
+Thay placeholder bằng UUID lớp; mã uppercase gồm chữ, số, `_`, `-` tối đa 50 ký tự.
+Thiếu lớp trong mapping thì toàn bộ 0003 rollback, giữ nguyên schema/data trước đó.
+Không suy mã học phần từ mã lớp. Grade cũ giữ score/feedback/status/version và được
+snapshot vào lịch sử; Published riêng lẻ cũ không tự đóng công bố toàn bài. Nếu grade
+cũ trỏ v1 trong khi đã có v2, vẫn sửa/công bố v1 được, không gán ngầm điểm sang v2.
 
 ## Seed và tài khoản giả lập
 
@@ -60,11 +80,13 @@ Nếu ID tài khoản seed đã mang mã/role khác, seed thất bại và rollb
 
 Có 48 dòng fixture: 6 user, 2 lớp, 3 phân công GV, 3 ghi danh, 2 tài liệu, 3 bài tập,
 3 hồ sơ nộp, 4 phiên bản, 2 điểm, 8 file metadata, 8 dòng gắn file, 2 thông báo,
-2 comment. Dates dùng mốc cố định 20/10/2026 để kiểm tra lịch sử; thang 10 là fixture,
+2 comment. Trigger tạo thêm 2 snapshot lịch sử điểm (50 dòng vật lý, không tính auth
+sessions/schema_migrations). Dates dùng mốc cố định 20/10/2026 để kiểm tra lịch sử; thang 10 là fixture,
 không chốt thang điểm của toàn hệ thống.
 
 File có provider `fixture`: chưa có PDF/object thật, không phải kết quả thử S3.
-API đăng nhập, quyền theo lớp, rule deadline và giao diện nghiệp vụ thuộc B1–B6.
+API đăng nhập/quyền, assignment/submission và grading hiện đã có. Upload/kiểm tra
+nội dung file và storage S3 thực tế vẫn thuộc B2. Seed không phải bộ nghiệm thu UI/S3.
 
 ## Bộ kiểm thử DB
 

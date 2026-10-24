@@ -32,6 +32,12 @@ export async function migrate(pool: pg.Pool, directory = migrationDirectory): Pr
   let locked = false;
   let transaction = false;
   try {
+    const mapping: unknown = JSON.parse(process.env.CLASS_COURSE_MAPPING ?? '{}');
+    if (!mapping || Array.isArray(mapping) || typeof mapping !== 'object' || Object.entries(mapping).some(([id,code]) =>
+      !/^[a-f0-9-]{36}$/i.test(id) || typeof code !== 'string' || !/^[A-Z0-9_-]{1,50}$/.test(code))) {
+      throw new Error('CLASS_COURSE_MAPPING must map class UUIDs to uppercase course codes.');
+    }
+    await client.query("SELECT set_config('lms.class_course_mapping', $1, false)", [JSON.stringify(mapping)]);
     const lock = await client.query<{ acquired: boolean }>('SELECT pg_try_advisory_lock($1) AS acquired', [migrationLock]);
     locked = lock.rows[0]?.acquired === true;
     if (!locked) throw new Error('Another migration process holds the database lock.');

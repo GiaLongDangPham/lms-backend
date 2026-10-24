@@ -1,0 +1,214 @@
+@startuml lms-erd
+!pragma layout smetana
+title LMS - schema 0001-0003 (17/10/2026)
+hide circle
+skinparam linetype ortho
+skinparam entity {
+  BackgroundColor #F5F9FF
+  BorderColor #34628F
+}
+
+entity "users" as USERS {
+  * id : uuid <<PK>>
+  school_code : text <<UK>>
+  full_name : text
+  email : text / NULL; contact only
+  password_hash : text
+  role : text
+  is_active : boolean
+  must_change_password : boolean
+}
+
+entity "classes" as CLASSES {
+  * id : uuid <<PK>>
+  code : text
+  course_code : text / UK with code and term
+  name : text
+  term : text
+  description : text / NULL
+  created_by : uuid <<FK>>
+}
+
+entity "class_teachers" as CLASS_TEACHERS {
+  * class_id : uuid <<PK,FK>>
+  * teacher_id : uuid <<PK,FK>>
+  assigned_by : uuid <<FK>>
+}
+
+entity "enrollments" as ENROLLMENTS {
+  * id : uuid <<PK>>
+  class_id : uuid <<FK>>
+  student_id : uuid <<FK>>
+  enrolled_by : uuid <<FK>>
+  is_active : boolean
+}
+
+entity "materials" as MATERIALS {
+  * id : uuid <<PK>>
+  class_id : uuid <<FK>>
+  created_by : uuid <<FK>>
+  title : text
+  description : text
+}
+
+entity "assignments" as ASSIGNMENTS {
+  * id : uuid <<PK>>
+  class_id : uuid <<FK>>
+  created_by : uuid <<FK>>
+  title : text
+  deadline_at : timestamptz
+  max_score : numeric
+  results_published_at : timestamptz / NULL until assignment-wide publication
+}
+
+entity "submissions" as SUBMISSIONS {
+  * id : uuid <<PK>>
+  assignment_id : uuid <<FK>>
+  enrollment_id : uuid <<FK>>
+  created_at : timestamptz
+}
+
+entity "submission_versions" as SUBMISSION_VERSIONS {
+  * submission_id : uuid <<PK,FK>>
+  * version_number : integer <<PK>>
+  submitted_at : timestamptz
+  deadline_at_submission : timestamptz
+  note : text / NULL; private; max 2000
+}
+
+entity "grades" as GRADES {
+  * id : uuid <<PK>>
+  assignment_id : uuid <<FK>> / UK with enrollment_id
+  enrollment_id : uuid <<FK>>
+  submission_id : uuid <<FK,UK>> / NULL when no submission
+  graded_version_number : integer <<FK>> / NULL when no submission
+  score : numeric
+  feedback : text
+  status : text
+  source : text / MANUAL or AUTO_ZERO_NO_SUBMISSION
+  revision : integer
+  graded_by : uuid <<FK>>
+  published_by : uuid <<FK>>
+  published_at : timestamptz
+}
+
+entity "grade_history" as GRADE_HISTORY {
+  * grade_id : uuid <<PK,FK>>
+  * version : integer <<PK>>
+  score : numeric
+  feedback : text
+  status : text
+  source : text
+  submission_id : uuid <<FK>> / NULL allowed
+  graded_version_number : integer <<FK>> / NULL allowed
+  changed_by : uuid <<FK>>
+  changed_at : timestamptz
+}
+
+entity "auth_sessions" as AUTH_SESSIONS {
+  * id : uuid <<PK>>
+  user_id : uuid <<FK>>
+  created_at : timestamptz
+  expires_at : timestamptz
+  revoked_at : timestamptz / NULL until revoked
+}
+
+entity "auth_refresh_tokens" as AUTH_REFRESH_TOKENS {
+  * token_hash : text <<PK>> / SHA256; never raw token
+  session_id : uuid <<FK>>
+  created_at : timestamptz
+  used_at : timestamptz / NULL until rotated
+}
+
+entity "files" as FILES {
+  * id : uuid <<PK>>
+  storage_provider : text
+  storage_container : text
+  object_key : text
+  original_name : text
+  mime_type : text
+  size_bytes : bigint
+  uploaded_by : uuid <<FK>>
+}
+
+entity "material_files" as MATERIAL_FILES {
+  * material_id : uuid <<PK,FK>>
+  * file_id : uuid <<PK,FK>>
+}
+
+entity "assignment_files" as ASSIGNMENT_FILES {
+  * assignment_id : uuid <<PK,FK>>
+  * file_id : uuid <<PK,FK>>
+}
+
+entity "submission_files" as SUBMISSION_FILES {
+  * submission_id : uuid <<PK,FK>>
+  * version_number : integer <<PK,FK>>
+  * file_id : uuid <<PK,FK>>
+}
+
+entity "notifications" as NOTIFICATIONS {
+  * id : uuid <<PK>>
+  recipient_id : uuid <<FK>>
+  assignment_id : uuid <<FK>>
+  kind : text
+  title : text
+  body : text
+  deduplication_key : text
+  read_at : timestamptz
+}
+
+entity "comments" as COMMENTS {
+  * id : uuid <<PK>>
+  author_id : uuid <<FK>>
+  assignment_id : uuid <<FK>>
+  submission_id : uuid <<FK>>
+  body : text
+}
+
+USERS ||..o{ CLASSES : creates
+USERS ||--o{ CLASS_TEACHERS : teaches
+USERS ||..o{ CLASS_TEACHERS : assigns
+CLASSES ||--o{ CLASS_TEACHERS : has_teachers
+USERS ||..o{ ENROLLMENTS : enrolls_as_student
+USERS ||..o{ ENROLLMENTS : records_enrollment
+CLASSES ||..o{ ENROLLMENTS : has_students
+CLASSES ||..o{ MATERIALS : contains
+USERS ||..o{ MATERIALS : authors
+CLASSES ||..o{ ASSIGNMENTS : contains
+USERS ||..o{ ASSIGNMENTS : authors
+ASSIGNMENTS ||..o{ SUBMISSIONS : receives
+ENROLLMENTS ||..o{ SUBMISSIONS : owns
+SUBMISSIONS ||--o{ SUBMISSION_VERSIONS : retains_history
+ASSIGNMENTS ||..o{ GRADES : has_results
+ENROLLMENTS ||..o{ GRADES : owns_results
+SUBMISSIONS |o..o| GRADES : optional_submission
+SUBMISSION_VERSIONS |o..o| GRADES : optional_graded_version
+GRADES ||--|{ GRADE_HISTORY : immutable_snapshots
+SUBMISSION_VERSIONS |o..o{ GRADE_HISTORY : preserves_graded_version
+USERS ||..o{ GRADE_HISTORY : changes
+USERS ||..o{ AUTH_SESSIONS : signs_in
+AUTH_SESSIONS ||..o{ AUTH_REFRESH_TOKENS : rotates
+USERS ||..o{ GRADES : grades
+USERS |o..o{ GRADES : publishes
+USERS ||..o{ FILES : uploads
+MATERIALS ||--o{ MATERIAL_FILES : attaches
+FILES ||--o{ MATERIAL_FILES : referenced_by
+ASSIGNMENTS ||--o{ ASSIGNMENT_FILES : attaches
+FILES ||--o{ ASSIGNMENT_FILES : referenced_by
+SUBMISSION_VERSIONS ||--o{ SUBMISSION_FILES : attaches
+FILES ||--o{ SUBMISSION_FILES : referenced_by
+USERS ||..o{ NOTIFICATIONS : receives
+ASSIGNMENTS |o..o{ NOTIFICATIONS : relates_to
+USERS ||..o{ COMMENTS : writes
+ASSIGNMENTS |o..o{ COMMENTS : discussed_in
+SUBMISSIONS |o..o{ COMMENTS : discussed_in
+
+legend bottom
+  16 business tables + 2 authentication tables; schema_migrations omitted.
+  grades: UNIQUE(assignment_id, enrollment_id); submission/version may both be NULL.
+  classes: UNIQUE(course_code, code, term). grade_history: append-only snapshots.
+  AUTO_ZERO_NO_SUBMISSION: score 0, Published, no fake submission.
+  PK = primary key; FK = foreign key; UK = unique.
+endlegend
+@enduml
