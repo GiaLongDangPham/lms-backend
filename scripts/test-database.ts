@@ -174,7 +174,8 @@ try {
   });
   await check('invalid, non-finite and excessive grades are rejected; max-score edits keep existing grades valid', async () => {
     for (const score of ['-1', '11', 'NaN', 'Infinity']) {
-      await rejectSql('UPDATE grades SET score = $1 WHERE submission_id = $2', [score, id.submission1], '23514');
+      await rejectSql('UPDATE grades SET score = $1 WHERE submission_id = $2', [score, id.submission1],
+        score === 'Infinity' ? '22003' : '23514');
     }
     await rejectSql('UPDATE assignments SET max_score = 8 WHERE id = $1', [id.assignmentA], '23514');
   });
