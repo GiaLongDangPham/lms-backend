@@ -48,14 +48,15 @@ try {
 
   await check('first migration creates all 15 domain tables on an empty database', async () => {
     assert.deepEqual(await migrate(pool), ['0001_initial_schema.sql', '0002_b1_auth.sql',
-      '0003_client_rules.sql', '0004_b3_assignments_submissions.sql']);
+      '0003_client_rules.sql', '0004_b3_assignments_submissions.sql',
+      '0005_assignment_publication_actor.sql']);
     const tables = await pool.query<{ tablename: string }>(
       "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'schema_migrations'");
     assert.deepEqual(tables.rows.map((row) => row.tablename).sort(), [...domainTables, 'grade_history', 'auth_sessions', 'auth_refresh_tokens'].sort());
   });
   await check('running migrations again is a no-op', async () => {
     assert.deepEqual(await migrate(pool), []);
-    assert.equal((await pool.query('SELECT * FROM schema_migrations')).rowCount, 4);
+    assert.equal((await pool.query('SELECT * FROM schema_migrations')).rowCount, 5);
   });
   await check('a competing migration/seed process cannot acquire the migration lock', async () => {
     const holder = await pool.connect();
@@ -80,13 +81,15 @@ try {
       await readFile(path.join(migrationDirectory, '0003_client_rules.sql'), 'utf8'));
     await writeFile(path.join(temporaryDirectory, '0004_b3_assignments_submissions.sql'),
       await readFile(path.join(migrationDirectory, '0004_b3_assignments_submissions.sql'), 'utf8'));
-    await writeFile(path.join(temporaryDirectory, '0005_rollback_probe.sql'),
+    await writeFile(path.join(temporaryDirectory, '0005_assignment_publication_actor.sql'),
+      await readFile(path.join(migrationDirectory, '0005_assignment_publication_actor.sql'), 'utf8'));
+    await writeFile(path.join(temporaryDirectory, '0006_rollback_probe.sql'),
       'CREATE TABLE rollback_probe(id integer); SELECT 1 / 0;');
     await assert.rejects(migrate(pool, temporaryDirectory), { code: '22012' });
     const probe = await pool.query<{ table_name: string | null }>(
       "SELECT to_regclass('public.rollback_probe')::text AS table_name");
     assert.equal(probe.rows[0]?.table_name, null);
-    assert.equal((await pool.query('SELECT * FROM schema_migrations')).rowCount, 4);
+    assert.equal((await pool.query('SELECT * FROM schema_migrations')).rowCount, 5);
     assert.deepEqual(await migrate(pool), []);
   });
   await check('local-only seed guard rejects remote hosts and production', async () => {
@@ -182,6 +185,26 @@ try {
   await check('Published grades require publisher/time and Draft grades cannot carry publication metadata', async () => {
     await rejectSql("UPDATE grades SET status = 'PUBLISHED' WHERE submission_id = $1", [id.submission1], '23514');
     await rejectSql("UPDATE grades SET status = 'DRAFT' WHERE submission_id = $1", [id.submission2], '23514');
+  });
+  await check('assignment publication records paired immutable timestamp and publisher fields', async () => {
+    await rejectSql('UPDATE assignments SET results_published_at = now() WHERE id = $1', [id.assignmentB], '23514');
+    await rejectSql('UPDATE assignments SET results_published_by = $1 WHERE id = $2',
+      [id.teacher2, id.assignmentB], '23514');
+    await pool.query(`UPDATE assignments SET results_published_at = '2026-10-24T08:00:00Z',
+      results_published_by = $1 WHERE id = $2`, [id.teacher1, id.assignmentA]);
+    const published = await pool.query<{ results_published_at: Date | null; results_published_by: string | null }>(
+      'SELECT results_published_at,results_published_by FROM assignments WHERE id=$1', [id.assignmentA]);
+    assert.equal(published.rows[0]?.results_published_at?.toISOString(), '2026-10-24T08:00:00.000Z');
+    assert.equal(published.rows[0]?.results_published_by, id.teacher1);
+    const unpublished = await pool.query<{ results_published_at: Date | null; results_published_by: string | null }>(
+      'SELECT results_published_at,results_published_by FROM assignments WHERE id=$1', [id.assignmentB]);
+    assert.deepEqual(unpublished.rows[0], { results_published_at: null, results_published_by: null });
+    await rejectSql('UPDATE assignments SET results_published_at = NULL WHERE id = $1', [id.assignmentA], '23514');
+    await rejectSql("UPDATE assignments SET results_published_at = '2026-10-24T09:00:00Z' WHERE id = $1",
+      [id.assignmentA], '23514');
+    await rejectSql('UPDATE assignments SET results_published_by = NULL WHERE id = $1', [id.assignmentA], '23514');
+    await rejectSql('UPDATE assignments SET results_published_by = $1 WHERE id = $2',
+      [id.teacher2, id.assignmentA], '23514');
   });
   await check('comments require exactly one target and notification events are deduplicated', async () => {
     await rejectSql("INSERT INTO comments(author_id, body) VALUES ($1, 'No target')", [id.student1], '23514');

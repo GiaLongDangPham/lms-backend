@@ -13,6 +13,7 @@ export interface AssignmentRow {
   created_at: Date;
   updated_at: Date;
   results_published_at: Date | null;
+  results_published_by: string | null;
 }
 
 export interface FileRow {

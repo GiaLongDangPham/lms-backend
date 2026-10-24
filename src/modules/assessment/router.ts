@@ -90,8 +90,9 @@ export function createAssessmentRouter(pool: pg.Pool, config: AuthConfig) {
       const results=await db.query<Grade & {student_id:string;revision:number}>(`SELECT g.*,e.student_id FROM grades g JOIN enrollments e ON e.id=g.enrollment_id
         WHERE g.assignment_id=$1 AND e.id=ANY($2::uuid[]) AND g.status='PUBLISHED'`,[a,enroll.rows.map(e=>e.id)]);
       for(const g of results.rows)await notifyResult(db,g,g.student_id,g.revision);
-      const stamp=await db.query<{results_published_at:Date}>(`UPDATE assignments SET results_published_at=COALESCE(results_published_at,now())
-        WHERE id=$1 RETURNING results_published_at`,[a]);
+      const stamp=await db.query<{results_published_at:Date}>(`UPDATE assignments SET
+        results_published_at=COALESCE(results_published_at,now()),results_published_by=COALESCE(results_published_by,$2)
+        WHERE id=$1 RETURNING results_published_at`,[a,p.user.id]);
       return {assignmentId:a,publishedCount:results.rowCount??0,automaticZeroCount,publishedAt:stamp.rows[0]!.results_published_at.toISOString()};
     });res.json(result);
   });
