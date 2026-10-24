@@ -2,6 +2,11 @@ import type { Principal } from '../b1/auth.js';
 import { ApiError, transaction } from '../b1/common.js';
 import { AssessmentRepository, type Db, type GradeRow } from './assessment.repository.js';
 
+export interface PublishedResultBackfill {
+  backfillPublishedResultsForEnrollment(db: import('pg').PoolClient, classId: string,
+    enrollmentId: string): Promise<number>;
+}
+
 export interface SaveSubmissionGradeInput {
   score: number;
   feedback?: string | null;
@@ -61,6 +66,20 @@ export interface AssignmentGradePublication {
 
 export class AssessmentService {
   constructor(private readonly repository: AssessmentRepository) {}
+
+  async backfillPublishedResultsForEnrollment(db: import('pg').PoolClient, classId: string,
+    enrollmentId: string): Promise<number> {
+    let inserted = 0;
+    for (const assignment of await this.repository.publishedAssignmentsForClass(db, classId)) {
+      const grade = await this.repository.insertEnrollmentAutomaticZero(db, assignment.id,
+        enrollmentId, assignment.results_published_by);
+      if (!grade) continue;
+      inserted += 1;
+      const studentId = await this.repository.enrollmentStudentId(db, enrollmentId);
+      await this.repository.notifyResult(db, grade, studentId);
+    }
+    return inserted;
+  }
 
   private teacherOnly(principal: Principal): void {
     if (principal.user.role !== 'TEACHER') {
@@ -206,7 +225,18 @@ export class AssessmentService {
   async publishAssignmentGrades(principal: Principal, assignmentId: string): Promise<AssignmentGradePublication> {
     this.teacherOnly(principal);
     return transaction(this.repository.db(), async db => {
-      const assignment = await this.assignmentAccess(db, principal, assignmentId, true);
+      const initial = await this.repository.findAssignment(db, assignmentId);
+      if (!initial) throw new ApiError(404, 'NOT_FOUND', 'Assignment was not found.');
+      if (!(await this.repository.lockClass(db, initial.class_id))) {
+        throw new ApiError(404, 'NOT_FOUND', 'Class was not found or is not accessible.');
+      }
+      if (!(await this.repository.hasClassAccess(db, principal, initial.class_id, true))) {
+        throw new ApiError(404, 'NOT_FOUND', 'Class was not found or is not accessible.');
+      }
+      const assignment = await this.repository.findAssignment(db, assignmentId, true);
+      if (!assignment || assignment.class_id !== initial.class_id) {
+        throw new ApiError(404, 'NOT_FOUND', 'Assignment was not found.');
+      }
       const cohort = await this.repository.publicationCohort(db, assignment.class_id);
       const enrollmentIds = cohort.map(enrollment => enrollment.id);
       const blockers = await this.repository.ungradedSubmissions(db, assignmentId, enrollmentIds);

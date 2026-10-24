@@ -6,6 +6,7 @@ import { hashPassword } from '../../security/password.js';
 import { createAuth, getPrincipal, requireAdmin, requireChangedPassword, requireClassAccess, type AuthConfig } from './auth.js';
 import { ApiError, classColumns, classDto, cursorId, email, enrollmentDto, nonempty, page, paging, parse,
   password, roles, schoolCode, transaction, userColumns, userDto, uuid, type User, type ClassRow, type EnrollmentRow } from './common.js';
+import type { EnrollmentService } from './enrollment.service.js';
 
 const createUser = z.object({ schoolCode, fullName: nonempty, email: email.optional(),
   role: z.enum(['TEACHER', 'STUDENT']), initialPassword: password }).strict();
@@ -15,7 +16,7 @@ const createClass = z.object({ code: nonempty.max(50), courseCode: schoolCode, n
   term: nonempty.max(50), description: z.string().max(5000).nullable().optional() }).strict();
 const updateClass = createClass.partial().refine(v => Object.keys(v).length > 0);
 
-export function createB1Router(pool: pg.Pool, config: AuthConfig, loginLimit = 10) {
+export function createB1Router(pool: pg.Pool, config: AuthConfig, enrollmentService: EnrollmentService, loginLimit = 10) {
   const router = Router();
   const auth = createAuth(pool, config);
   async function enrollmentResponse(row: EnrollmentRow) {
@@ -177,36 +178,14 @@ export function createB1Router(pool: pg.Pool, config: AuthConfig, loginLimit = 1
   router.post('/classes/:id/enrollments', requireAdmin, async (req, res) => {
     const id = parse(uuid, req.params.id);
     const body = parse(z.object({ studentId: uuid }).strict(), req.body);
-    await requireClassAccess(pool, getPrincipal(req), id);
-    const result = await transaction(pool, async client => {
-      const student = await client.query<User>(`SELECT ${userColumns} FROM users WHERE id = $1 FOR SHARE`, [body.studentId]);
-      if (!student.rows[0]) throw new ApiError(404, 'NOT_FOUND', 'Student was not found.');
-      if (student.rows[0].role !== 'STUDENT' || !student.rows[0].is_active) {
-        throw new ApiError(400, 'INVALID_MEMBER', 'An active student account is required.');
-      }
-      // Re-enrollment reactivates the same record, preserving all submissions/history.
-      const inserted = await client.query<EnrollmentRow>(`INSERT INTO enrollments(class_id, student_id, enrolled_by) VALUES ($1, $2, $3)
-        ON CONFLICT (class_id, student_id) DO UPDATE SET is_active = true, enrolled_by = EXCLUDED.enrolled_by
-        WHERE NOT enrollments.is_active RETURNING *`, [id, body.studentId, getPrincipal(req).user.id]);
-      if (!inserted.rows[0]) throw new ApiError(409, 'CONFLICT', 'Student is already actively enrolled.');
-      return inserted.rows[0];
-    });
+    const result = await enrollmentService.enroll(getPrincipal(req), id, body.studentId);
     res.status(201).json(await enrollmentResponse(result));
   });
   router.patch('/classes/:id/enrollments/:enrollmentId', requireAdmin, async (req, res) => {
     const id = parse(uuid, req.params.id); const enrollmentId = parse(uuid, req.params.enrollmentId);
     const body = parse(z.object({ isActive: z.boolean() }).strict(), req.body);
-    await requireClassAccess(pool, getPrincipal(req), id);
-    const result = await transaction(pool, async client => {
-      const previous = await client.query<{ student_id: string }>('SELECT student_id FROM enrollments WHERE id = $1 AND class_id = $2', [enrollmentId, id]);
-      if (!previous.rows[0]) throw new ApiError(404, 'NOT_FOUND', 'Enrollment was not found in this class.');
-      const student = await client.query<User>(`SELECT ${userColumns} FROM users WHERE id = $1 FOR SHARE`, [previous.rows[0].student_id]);
-      if (body.isActive && !student.rows[0]?.is_active) throw new ApiError(400, 'INVALID_MEMBER', 'Student account is inactive.');
-      const updated = await client.query<EnrollmentRow>('UPDATE enrollments SET is_active = $1 WHERE id = $2 AND class_id = $3 RETURNING *',
-        [body.isActive, enrollmentId, id]);
-      return updated.rows[0];
-    });
-    res.json(await enrollmentResponse(result!));
+    const result = await enrollmentService.setActive(getPrincipal(req), id, enrollmentId, body.isActive);
+    res.json(await enrollmentResponse(result));
   });
   return router;
 }

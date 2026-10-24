@@ -68,6 +68,11 @@ export class AssessmentRepository {
       WHERE id=$1 ${lock ? 'FOR UPDATE' : ''}`, [assignmentId])).rows[0];
   }
 
+  async lockClass(db: Db, classId: string): Promise<boolean> {
+    const result = await db.query('SELECT id FROM classes WHERE id=$1 FOR UPDATE', [classId]);
+    return Boolean(result.rowCount);
+  }
+
   async hasClassAccess(db: Db, principal: Principal, classId: string, lockMembership = false): Promise<boolean> {
     const { user } = principal;
     let sql: string;
@@ -170,6 +175,23 @@ export class AssessmentRepository {
       results_published_by=COALESCE(results_published_by,$2)
       WHERE id=$1 RETURNING results_published_at`, [assignmentId, teacherId]);
     return result.rows[0]!.results_published_at;
+  }
+
+  async publishedAssignmentsForClass(db: Db, classId: string) {
+    return (await db.query<{ id: string; results_published_by: string }>(`SELECT id,results_published_by FROM assignments
+      WHERE class_id=$1 AND results_published_at IS NOT NULL AND results_published_by IS NOT NULL ORDER BY id`,
+    [classId])).rows;
+  }
+
+  async insertEnrollmentAutomaticZero(db: Db, assignmentId: string, enrollmentId: string, publisherId: string) {
+    return (await db.query<GradeRow>(`INSERT INTO grades
+      (assignment_id,enrollment_id,submission_id,graded_version_number,score,status,source,graded_by,published_by,published_at)
+      SELECT a.id,$2,NULL,NULL,0,'PUBLISHED','AUTO_ZERO_NO_SUBMISSION',a.results_published_by,
+        a.results_published_by,a.results_published_at
+      FROM assignments a WHERE a.id=$1 AND a.results_published_at IS NOT NULL
+        AND a.results_published_by=$3
+      ON CONFLICT(assignment_id,enrollment_id) DO NOTHING RETURNING *`,
+    [assignmentId, enrollmentId, publisherId])).rows[0];
   }
 
   async findPublishedGrade(db: Db, assignmentId: string, studentId: string) {
