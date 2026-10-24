@@ -47,6 +47,12 @@ export class AssignmentRepository {
     return result.rows[0];
   }
 
+  async lockAssignmentInClass(db: Db, id: string, classId: string): Promise<AssignmentRow | undefined> {
+    const result = await db.query<AssignmentRow>(
+      'SELECT * FROM assignments WHERE id=$1 AND class_id=$2 FOR UPDATE', [id, classId]);
+    return result.rows[0];
+  }
+
   async listAssignmentIds(db: Db, classId: string, after: string | null, limit: number) {
     return (await db.query<{ id: string }>(`SELECT id FROM assignments
       WHERE class_id = $1 AND ($2::uuid IS NULL OR id > $2)

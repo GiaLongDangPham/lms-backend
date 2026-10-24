@@ -39,7 +39,8 @@ finally {
 }
 const selected = process.argv.includes('--enrollment-publication')
   ? ['tests/enrollment-publication.integration.test.ts']
-  : process.argv.includes('--client-rules') ? ['tests/client-rules.integration.test.ts']
+  : process.argv.includes('--assignments') ? ['tests/assignments.integration.test.ts']
+    : process.argv.includes('--client-rules') ? ['tests/client-rules.integration.test.ts']
     : ['tests/b1.integration.test.ts', 'tests/client-rules.integration.test.ts'];
 for (const file of selected) {
   await runFile(file);
