@@ -7,6 +7,9 @@ Xem [từ điển dữ liệu](database-design.md) và [quyết định](D1-deci
 PK = khóa chính; FK = khóa ngoại; UK = khóa duy nhất. UUID đã được Long chốt Q02.
 Migration `0003` bổ sung nghiệp vụ mới và giữ dữ liệu đã có từ 0001/0002.
 ERD thể hiện cột chính và cardinality, không liệt kê toàn bộ audit fields/index.
+`assignments.results_published_by` liên kết tới `users` để lưu actor công bố toàn
+bài trong DB; nó chỉ có giá trị cùng `results_published_at`, cả hai được ghi một lần
+và bất biến. Đây là provenance nội bộ, không phải trường API.
 Đường liền biểu thị quan hệ định danh, nét đứt biểu thị quan hệ không định danh;
 cú pháp theo [tài liệu Mermaid ERD](https://mermaid.js.org/syntax/entityRelationshipDiagram.html).
 
@@ -35,6 +38,10 @@ grade (assignment X + enrollment SV A) → version được chấm
 SV B không nộp: grade (X + enrollment B) → 0 Published
 submission_id = NULL; version = NULL; source = AUTO_ZERO_NO_SUBMISSION
 ```
+
+Nếu SV được ghi danh hoặc kích hoạt lại sau khi X đã công bố, transaction ghi danh
+tạo kết quả 0 Published còn thiếu, giữ grade/history đã có, không tạo submission hay
+version giả và không mở khóa nộp bài.
 
 Một Grade hiện tại/bài tập/ghi danh, nhiều snapshot lịch sử bất biến. Có grade thì
 khóa nộp lại. SV chỉ xem snapshot Published. Sửa 0 tự động chuyển nguồn hiện tại

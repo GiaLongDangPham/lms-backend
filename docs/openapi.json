@@ -3,7 +3,7 @@
   "info": {
     "title": "LMS Nhóm 2 API",
     "version": "0.4.0-integration-draft",
-    "description": "D2 review draft for CP1. Paths are relative to /api. x-roles names permitted actors; every resource operation also requires class membership or ownership checks. Client Log #18–#20 rules are approved: grading locks further submissions, grades may be corrected with complete history, and publishing is atomic for the whole assignment with automatic zeroes for active students who did not submit. Resubmission closes at the current deadline and reopens only when a teacher extends that deadline; a first submission may still be late. Submission time is the server-side successful atomic commit time. Scores use at most two decimal places. Rules still marked x-decision-pending are not approved. The mock returns examples only and does not enforce security or persist data."
+    "description": "D2 review draft for CP1. Paths are relative to /api. x-roles names permitted actors; every resource operation also requires class membership or ownership checks. Client Log #18–#20 rules are approved: grading locks further submissions, grades may be corrected with complete history, and publishing is atomic for the whole assignment with automatic zeroes for active students who did not submit. Creating or reactivating an enrollment for an assignment already published atomically creates any missing Published zero result while preserving existing grades/history and without fabricating a submission; submission access stays locked. Assignment-wide publisher provenance is database-only. Resubmission closes at the current deadline and reopens only when a teacher extends that deadline; a first submission may still be late. Submission time is the server-side successful atomic commit time. Scores use at most two decimal places. Rules still marked x-decision-pending are not approved. The mock returns examples only and does not enforce security or persist data."
   },
   "servers": [
     {
@@ -603,9 +603,9 @@
           }
         },
         "x-decision-pending": [
-          "Q10: withdrawal, re-enrollment and access to historical work"
+          "Q10: access to historical work after withdrawal"
         ],
-        "description": "Active duplicate enrollment returns 409. Re-enrollment reactivates the same inactive enrollment ID; all submission/grade history is preserved. Deactivation blocks student class access; assigned teachers retain access to historical work."
+        "description": "Active duplicate enrollment returns 409. Re-enrollment reactivates the same inactive enrollment ID; all submission/grade history is preserved. For assignments already published, enrollment creation atomically creates any missing Published 0 result, preserving existing grades and history and fabricating no submission or submission version; submission access stays locked. Deactivation blocks student class access; assigned teachers retain access to historical work."
       }
     },
     "/files": {
@@ -1802,7 +1802,7 @@
             "$ref": "#/components/responses/InternalError"
           }
         },
-        "description": " Initial-password accounts receive 403 PASSWORD_CHANGE_REQUIRED. Account/class management is Admin-only; schoolCode and role are immutable through B1 update. Access checks use current active membership."
+        "description": "Initial-password accounts receive 403 PASSWORD_CHANGE_REQUIRED. Account/class management is Admin-only; schoolCode and role are immutable through B1 update. For assignments already published, reactivating an enrollment atomically creates any missing Published 0 result, preserving existing grades and history and fabricating no submission or submission version; submission access stays locked. Access checks use current active membership."
       }
     },
     "/classes/{classId}/enrollments/bulk": {
@@ -1850,7 +1850,7 @@
         ],
         "operationId": "publishAssignmentGrades",
         "summary": "Atomically publish results for every active student in the class",
-        "description": "Publish succeeds only when every submitted assignment has a current grade. In one transaction it publishes all graded results, creates and publishes score 0 results with source AUTO_ZERO_NO_SUBMISSION for active enrolled students who did not submit, records history, and creates notifications. If any submitted work is ungraded, no result is published and 409 returns the blockers.",
+        "description": "Publish succeeds only when every submitted assignment has a current grade. In one transaction it publishes all graded results, creates and publishes score 0 results with source AUTO_ZERO_NO_SUBMISSION for active enrolled students who did not submit, records history, and creates notifications. For assignments already published, enrollment creation or reactivation atomically creates any missing Published 0 result while preserving existing grades and history; it fabricates no submission or version, and submission access stays locked. If any submitted work is ungraded, no result is published and 409 returns the blockers.",
         "x-roles": [
           "TEACHER"
         ],

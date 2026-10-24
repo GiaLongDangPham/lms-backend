@@ -102,7 +102,10 @@ do frontend gửi. Các cột tùy chọn được ghi `NULL`; những cột kh�
 - UNIQUE `(class_id, student_id)`; `is_active boolean` là đề xuất cho thôi học/ghi danh lại.
 - `enrolled_by uuid` — FK → users; `created_at`, `updated_at`.
 - Mỗi dòng chỉ ghi danh SV, tách khỏi phân công GV. Giữ ID khi đổi trạng thái để
-  bài nộp cũ còn truy vết; Q10 phải chốt quyền xem và ghi danh lại.
+  bài nộp cũ còn truy vết. Khi tạo enrollment hoặc kích hoạt lại sau khi assignment
+  đã công bố, cùng transaction tạo kết quả 0 Published còn thiếu cho assignment đó;
+  không thay grade/history hiện có, không tạo submission/version giả và không mở
+  khóa nộp. Quyền xem sau thôi học vẫn cần Kha chốt.
 
 ### `materials`
 
@@ -117,6 +120,10 @@ do frontend gửi. Các cột tùy chọn được ghi `NULL`; những cột kh�
 - `title text`, `description text NULL`, `deadline_at timestamptz`, `max_score numeric`.
 - `results_published_at timestamptz NULL`: mốc công bố toàn bài, không được mở lại;
   Published riêng lẻ có từ schema cũ không tự suy thành mốc toàn bài.
+- `results_published_by uuid NULL` — FK → `users`: actor đã công bố toàn bài, chỉ
+  lưu trong database và không thuộc public API. `results_published_at` và
+  `results_published_by` cùng NULL trước khi công bố và cùng có giá trị sau đó;
+  ghi một lần, bất biến, không có unpublish.
 - `created_by uuid` — FK → users; `created_at`, `updated_at`.
 - CHECK `max_score > 0`; chưa có default thang 10 hay 100 (Q05).
 - Không dùng trạng thái Draft/Published của Grade để suy ra trạng thái bài tập.
