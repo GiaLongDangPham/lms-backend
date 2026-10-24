@@ -50,13 +50,15 @@ CREATE UNIQUE INDEX submission_files_one_parent_idx ON submission_files(file_id)
 CREATE FUNCTION prevent_file_reuse() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE current_status text;
 BEGIN
-  IF TG_TABLE_NAME = 'material_files' AND EXISTS (
-    SELECT 1 FROM material_files WHERE material_id=NEW.material_id AND file_id=NEW.file_id) THEN RETURN NEW;
-  ELSIF TG_TABLE_NAME = 'assignment_files' AND EXISTS (
-    SELECT 1 FROM assignment_files WHERE assignment_id=NEW.assignment_id AND file_id=NEW.file_id) THEN RETURN NEW;
-  ELSIF TG_TABLE_NAME = 'submission_files' AND EXISTS (
-    SELECT 1 FROM submission_files WHERE submission_id=NEW.submission_id
-      AND version_number=NEW.version_number AND file_id=NEW.file_id) THEN RETURN NEW;
+  IF TG_TABLE_NAME = 'material_files' THEN
+    IF EXISTS (SELECT 1 FROM material_files
+      WHERE material_id=NEW.material_id AND file_id=NEW.file_id) THEN RETURN NEW; END IF;
+  ELSIF TG_TABLE_NAME = 'assignment_files' THEN
+    IF EXISTS (SELECT 1 FROM assignment_files
+      WHERE assignment_id=NEW.assignment_id AND file_id=NEW.file_id) THEN RETURN NEW; END IF;
+  ELSIF TG_TABLE_NAME = 'submission_files' THEN
+    IF EXISTS (SELECT 1 FROM submission_files WHERE submission_id=NEW.submission_id
+      AND version_number=NEW.version_number AND file_id=NEW.file_id) THEN RETURN NEW; END IF;
   END IF;
   SELECT lifecycle_status INTO current_status FROM files WHERE id = NEW.file_id FOR UPDATE;
   IF current_status IS DISTINCT FROM 'PENDING' THEN
