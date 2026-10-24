@@ -1,4 +1,5 @@
 import type pg from 'pg';
+import type { Principal } from '../b1/auth.js';
 
 export type Db = pg.Pool | pg.PoolClient;
 
@@ -65,6 +66,27 @@ export class AssessmentRepository {
   async findAssignment(db: Db, assignmentId: string, lock = false) {
     return (await db.query<AssessmentAssignmentRow>(`SELECT * FROM assignments
       WHERE id=$1 ${lock ? 'FOR UPDATE' : ''}`, [assignmentId])).rows[0];
+  }
+
+  async hasClassAccess(db: Db, principal: Principal, classId: string, lockMembership = false): Promise<boolean> {
+    const { user } = principal;
+    let sql: string;
+    let values: string[];
+    if (user.role === 'ADMIN') {
+      sql = `SELECT c.id FROM classes c WHERE c.id=$1 ${lockMembership ? 'FOR KEY SHARE OF c' : ''}`;
+      values = [classId];
+    } else if (user.role === 'TEACHER') {
+      sql = `SELECT c.id FROM classes c JOIN class_teachers ct ON ct.class_id=c.id
+        WHERE c.id=$1 AND ct.teacher_id=$2 ${lockMembership ? 'FOR KEY SHARE OF c,ct' : ''}`;
+      values = [classId, user.id];
+    } else {
+      sql = `SELECT c.id FROM classes c JOIN enrollments e ON e.class_id=c.id
+        WHERE c.id=$1 AND e.student_id=$2 AND e.is_active
+        ${lockMembership ? 'FOR KEY SHARE OF c,e' : ''}`;
+      values = [classId, user.id];
+    }
+    const result = await db.query(sql, values);
+    return Boolean(result.rowCount);
   }
 
   async findSubmissionTarget(db: Db, submissionId: string) {

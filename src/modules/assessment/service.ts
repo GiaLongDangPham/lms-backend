@@ -1,4 +1,4 @@
-import { requireClassAccess, type Principal } from '../b1/auth.js';
+import type { Principal } from '../b1/auth.js';
 import { ApiError, transaction } from '../b1/common.js';
 import { AssessmentRepository, type Db, type GradeRow } from './assessment.repository.js';
 
@@ -77,7 +77,8 @@ export class AssessmentService {
   private async assignmentAccess(db: Db, principal: Principal, assignmentId: string, lock = false) {
     const assignment = await this.repository.findAssignment(db, assignmentId);
     if (!assignment) throw new ApiError(404, 'NOT_FOUND', 'Assignment was not found.');
-    await requireClassAccess(db, principal, assignment.class_id, lock);
+    const hasAccess = await this.repository.hasClassAccess(db, principal, assignment.class_id, lock);
+    if (!hasAccess) throw new ApiError(404, 'NOT_FOUND', 'Class was not found or is not accessible.');
     if (!lock) return assignment;
     const locked = await this.repository.findAssignment(db, assignmentId, true);
     if (!locked || locked.class_id !== assignment.class_id) {
