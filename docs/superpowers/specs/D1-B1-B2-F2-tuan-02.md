@@ -266,6 +266,44 @@ api:test trên PostgreSQL để xác nhận phần tích hợp. Các test dùng 
 
 ## Documentation and migration policy
 
+### VanDe regression fixes — 25/10/2026
+
+Nguồn: [VanDe](https://docs.google.com/spreadsheets/d/1HvKlMRfsfEOSjFBfbY3rnPW469DV5TsXS8WyPOakbAM/edit?gid=1652459086#gid=1652459086),
+Bug-01, Fail-01, Fail-03 và Fail-04. Chỉ sửa phần B1/B2 của Long; không cập nhật sheet.
+
+- **Fail-01:** đã có bốn endpoint tài liệu trong nhánh PR #10: `GET/POST
+  /api/classes/:id/materials`, `GET/PATCH /api/materials/:id`. Đã gắn router vào app;
+  test HTTP kiểm tra tạo/list/cursor/đọc/sửa, contract, quyền và attachment. Cần chạy
+  backend từ nhánh/commit PR #10 hoặc develop sau khi PR merge; bản develop chưa có
+  B2 không cung cấp các endpoint này. Không thêm endpoint ngoài D2 để xử lý ghi nhận cũ.
+
+- **Fail-03:** DOCX/XLSX/PPTX chỉ chứa XML/rels/VML hoặc ảnh PNG/JPEG/GIF/WebP/BMP/TIFF
+  có magic bytes khớp. Chặn embeddings/OLE/ActiveX/macros/externalLinks, binary entry,
+  executable, DTD và relationship ngoài. XML được parse theo stream bằng SAX, decode
+  character reference trước kiểm tra; attribute namespace/case khác không che được
+  `TargetMode`, `Target`, `Type`. Giữ giới hạn archive cũ. Package hợp lệ vẫn được nhận;
+  Office có nội dung nhúng/active hoặc part ngoài allowlist trả 415.
+- **Fail-04:** `POST /files` có giới hạn mặc định 20 lượt/60 giây/user, tính cả upload
+  lỗi validation, dùng ID người dùng qua các session. Quá giới hạn trả 429
+  `UPLOAD_RATE_LIMITED` và `Retry-After`. Bộ đếm rate ở MemoryStore của từng process;
+  nếu scale nhiều process cần shared rate store. Quota DB dùng chung: tối đa 20 file
+  và 250 MiB tổng `PENDING` + `DELETE_PENDING`/user. Khóa user row, đếm và reserve
+  trong một transaction trước ghi object; request đồng thời qua nhiều app không
+  vượt quota. Vượt quota trả 429 `UPLOAD_QUOTA_EXCEEDED`, không tạo row/object mới.
+  Attach file giải phóng quota; backlog xóa lỗi giữ quota đến khi cleanup thành công.
+  Cấu hình bốn biến `UPLOAD_*` trong `.env.example`, chỉ nhận số nguyên dương;
+  không cần migration mới.
+- **Bug-01:** [ảnh báo lỗi](https://drive.google.com/file/d/1olP0s7gSQN7dVMpvcWhmw2FFPq9GX7R1/view)
+  cho thấy seed `Lớp Demo A/B` đúng nhưng tên lớp `CO2013/L01` đã chứa `?` trong JSON.
+  Chưa có request gốc để kết luận client nào làm mất dấu. API kiểm tra byte UTF-8
+  trước parse JSON, tránh decoder âm thầm thay byte lỗi bằng U+FFFD: trả 400
+  `INVALID_ENCODING`; charset JSON khác UTF-8 trả 415 `UNSUPPORTED_CHARSET`.
+  Regression kiểm tra tạo/sửa/đọc/tìm lớp, mô tả và tên người dùng có dấu qua HTTP/DB.
+  Chuỗi ASCII đã chứa `?` là dữ liệu hợp lệ, không thể suy ngược tên tiếng Việt;
+  người nhập cần sửa lại tên đúng qua API/form sau khi kiểm tra bản gốc.
+
+Đề xuất Nam bổ sung các mã lỗi 429/encoding vào D2/OpenAPI; không sửa file D2.
+
 OpenAPI là contract duy nhất và thuộc task D2 của Nam; file được giữ nguyên.
 Long bàn giao đề xuất mô tả bulk counts/status, fileIds maxItems/uniqueItems,
 text lengths và lỗi storage 403/503 để Nam review/cập nhật. Các ràng buộc và mã

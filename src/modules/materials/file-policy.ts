@@ -1,10 +1,12 @@
 import { extname } from 'node:path';
 import { open, stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
+import type { Readable } from 'node:stream';
 import { TextDecoder } from 'node:util';
 import { fileTypeFromFile } from 'file-type';
 import yauzl from 'yauzl';
 import { ApiError } from '../b1/common.js';
+import { allowedOfficePart, inspectOfficePart } from './office-policy.js';
 
 export const maxFileBytes = 25 * 1024 * 1024;
 const textMimes: Record<string, string[]> = {
@@ -41,7 +43,8 @@ export async function inspectZip(path: string, office = false): Promise<void> {
     yauzl.open(path, { lazyEntries: true, strictFileNames: true, validateEntrySizes: true }, (error, zip) => {
       if (error || !zip) { reject(unsupported()); return; }
       let count = 0; let expanded = 0; let compressed = 0; let settled = false;
-      const fail = () => { if (!settled) { settled = true; zip.close(); reject(unsupported()); } };
+      let currentStream: Readable | undefined;
+      const fail = () => { if (!settled) { settled = true; currentStream?.destroy(); zip.close(); reject(unsupported()); } };
       zip.on('error', fail);
       zip.on('end', () => { if (!settled) { settled = true; resolve(); } });
       zip.on('entry', (entry: yauzl.Entry) => {
@@ -53,19 +56,27 @@ export async function inspectZip(path: string, office = false): Promise<void> {
         if (++count > 100 || entry.isEncrypted() || mode === 0xa000 || /(^\/|^[a-z]:|\\)/i.test(name)
           || name.split('/').some(part => part === '..' || part === '.')
           || /vbaproject|activex|macros/i.test(name)
+          || (office && !allowedOfficePart(name, directory))
           || (!office && !directory && (!allowedName(name.split('/').at(-1)!) || archiveExts.has(extension)))
           || entry.uncompressedSize > 200 * 1024 * 1024) { fail(); return; }
         if (directory) { zip.readEntry(); return; }
         zip.openReadStream(entry, (streamError, stream) => {
           if (streamError || !stream) { fail(); return; }
-          stream.on('error', fail);
-          stream.on('data', (chunk: Buffer) => {
+          currentStream = stream;
+          const countBytes = (chunk: Buffer) => {
             expanded += chunk.length;
             if (expanded > 200 * 1024 * 1024 || expanded > Math.max(compressed, 1) * 20) {
-              stream.destroy(); fail();
+              throw unsupported();
             }
-          });
-          stream.on('end', () => { if (!settled) zip.readEntry(); });
+          };
+          void (async () => {
+            try {
+              if (office) await inspectOfficePart(stream, name, countBytes);
+              else for await (const chunk of stream) countBytes(Buffer.from(chunk));
+              currentStream = undefined;
+              if (!settled) zip.readEntry();
+            } catch { fail(); }
+          })();
         });
       });
       zip.readEntry();

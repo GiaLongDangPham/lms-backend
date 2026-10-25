@@ -211,12 +211,12 @@ thay đổi tuần 02. Không đổi tài liệu task của thành viên khác.
 
 **Files:** Review toàn bộ working tree của hai repo; chỉ sửa nếu có lỗi được chứng minh.
 
-**Interfaces:** Code local có evidence và checklist review/staging; chưa phát hành
-thay đổi mới lên GitHub hoặc xác nhận task Done.
+**Interfaces:** Code trên nhánh tính năng có evidence và checklist review/staging;
+backend cập nhật qua PR #10, chưa xác nhận task Done hoặc staging acceptance.
 
-- [x] **Step 1: Backend static/unit/build.** `npm run check`: 22 test thường đạt;
-  có regression cho đuôi file trùng thuộc tính kế thừa JavaScript.
-- [x] **Step 2: PostgreSQL/API.** `npm run api:test`: 58 test đạt; `npm run db:test`:
+- [x] **Step 1: Backend static/unit/build.** `npm run check`: 29 test thường đạt;
+  gồm regression Office package, encoding JSON và cấu hình upload quota.
+- [x] **Step 2: PostgreSQL/API.** `npm run api:test`: 65 test đạt; `npm run db:test`:
   20 kiểm tra đạt trên DB tạm.
 - [x] **Step 3: Contract/mock.** `npm run api:validate` và
   `node scripts/mock-api.mjs --self-test`: đạt, 34 paths/48 operations.
@@ -224,9 +224,9 @@ thay đổi mới lên GitHub hoặc xác nhận task Done.
   develop a8b37de; smoke browser đạt.
 - [x] **Step 5: Diff/dependencies.** `git diff --check` đạt hai repo;
   npm audit báo 0 vulnerability tại lần kiểm tra 25/10/2026.
-- [ ] **Step 6: Review team và GitHub CI.** Chuẩn bị commit/PR theo mã hoạt động,
-  review đúng người. Hai nhánh của Long được bàn giao để mở PR hướng develop;
-  chưa có kết quả CI hoặc review cho các thay đổi mới trước khi mở PR.
+- [ ] **Step 6: Review team và GitHub CI.** Backend tiếp tục trên
+  [PR #10](https://github.com/GiaLongDangPham/lms-backend/pull/10) hướng develop;
+  frontend bàn giao nhánh F2 để Long tạo PR. Chờ CI và reviewer cho bản sửa mới.
 - [ ] **Step 7: Staging acceptance.** Chạy checklist dưới đây; chỉ đóng task khi
   có bằng chứng môi trường và reviewer, không dựa vào local verified.
 
@@ -234,8 +234,8 @@ thay đổi mới lên GitHub hoặc xác nhận task Done.
 
 | Check | Kết quả |
 | --- | --- |
-| Backend check | Lint, typecheck, 22 test và build đạt |
-| API integration | B1 21, Client Rules 13, Assignments 7, Enrollment Publication 6, Materials/Bulk 11: tổng 58 đạt |
+| Backend check | Lint, typecheck, 29 test và build đạt; trước lượt sửa VanDe: 22 |
+| API integration | B1 22, Client Rules 13, Assignments 7, Enrollment Publication 6, Materials/Bulk 17: tổng 65 đạt |
 | DB integration | 20 kiểm tra migration/seed/constraint đạt |
 | Contract/mock | Validation và self-test đạt |
 | Frontend check | Sau đồng bộ develop a8b37de và rà PR: lint, 61 test, TypeScript/Vite build đạt |
@@ -249,6 +249,37 @@ và `tmp/verification/week02-screenshots/`. Đây là bằng chứng local ngoà
 phải artifact CI được cả nhóm mặc nhiên truy cập.
 
 ## Staging Runbook and Acceptance
+
+### Bug-01 / Fail-01 / Fail-03 / Fail-04
+
+- [x] Fail-01: đối chiếu bốn endpoint tài liệu của PR #10; kiểm tra HTTP/contract,
+  membership và vòng đời file. Endpoints đã có trước lượt sửa này.
+- [x] Chặn Office package chứa executable/OLE/DTD/external relationship, kể cả
+  character reference và attribute che khuất; kiểm tra DOCX/XLSX/PPTX hợp lệ.
+- [x] Thêm rate theo user và quota count/bytes bằng transaction PostgreSQL;
+  kiểm tra upload đồng thời, nhiều session/app, user khác và cleanup/attach.
+- [x] Chặn byte JSON UTF-8 lỗi trước decode; thêm regression B1 dữ liệu tiếng Việt.
+- [x] Chạy lại check/API/DB/contract/mock trước commit và push PR #10; audit 0 vulnerability.
+
+Rate test dùng timeout 30 giây cho nhiều lượt đăng nhập Argon2 trên máy local;
+window rate vẫn 60 giây. Quota test count chạy đồng thời qua hai app dùng chung DB,
+byte quota kiểm tra boundary và ba upload song song; rejected upload không tạo object.
+
+Với PowerShell, gửi byte UTF-8 tường minh khi gọi API có tiếng Việt, đặc biệt
+Windows PowerShell 5.1. Không dùng ASCII conversion hay chuyển Buffer thành JSON object:
+
+```powershell
+# $accessToken và $classId lấy từ phiên/record cần sửa, không đưa vào Git.
+$classPayload = @{ name = 'Cơ sở dữ liệu' } | ConvertTo-Json -Compress
+$classBytes = [System.Text.Encoding]::UTF8.GetBytes($classPayload)
+Invoke-RestMethod -Method Patch -Uri "http://localhost:3000/api/classes/$classId" `
+  -Headers @{ Authorization = "Bearer $accessToken" } `
+  -ContentType 'application/json; charset=utf-8' -Body $classBytes
+```
+
+Nếu dùng file JSON, lưu file bằng UTF-8; đối chiếu Network Payload và Response.
+Ảnh Bug-01 có tên đã mất dấu thành `?`; backend không tự sửa dữ liệu cũ hoặc đoán tên.
+Admin nhập lại sau khi xác nhận tên gốc. Không thay đổi DB dự án trong lượt kiểm tra này.
 
 **Prerequisites:** Node 22, PostgreSQL 17, backend JWT/origins/cookie HTTPS đúng
 README; bucket private đã được tạo, quyền GetObject/PutObject/DeleteObject giới

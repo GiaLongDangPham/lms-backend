@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { ZipFile } from 'yazl';
 import { afterAll, describe, expect, it } from 'vitest';
 import { allowedName, inspectZip, validateFile } from '../src/modules/materials/file-policy.js';
+import { officePackage, officeTypes, type OfficeFormat } from './helpers/office-package.js';
 
 const directory = await mkdtemp(join(tmpdir(), 'lms-policy-test-'));
 let index = 0;
@@ -37,6 +38,28 @@ function legacyOffice(names: string[]) {
 afterAll(async () => { await rm(directory, { recursive: true, force: true }); });
 
 describe('Q08 upload content policy', () => {
+  for (const format of ['docx', 'xlsx', 'pptx'] as OfficeFormat[]) {
+    it(`accepts a safe ${format} and rejects executables, embedded OLE, active relationships and disguised binary parts`, async () => {
+      const type = officeTypes[format]; const base = type.main.split('/')[0]!;
+      const valid = await fixture(await officePackage(format));
+      await expect(validateFile(valid, `lesson.${format}`, type.mime)).resolves.toMatchObject({ mime: type.mime });
+      for (const entry of [
+        { name: `${base}/payload.exe`, content: 'MZ executable' },
+        { name: `${base}/embeddings/oleObject1.bin`, content: Buffer.from('d0cf11e0a1b11ae1', 'hex') },
+        { name: `${base}/embeddings/nested.xml`, content: '<object/>' },
+        { name: `${base}/_rels/package.xml.rels`, content: '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/package" Target="hidden.xml"/></Relationships>' },
+        { name: `${base}/media/disguised.png`, content: 'MZ executable' },
+        { name: `${base}/payload.xml`, content: 'MZ executable' },
+        { name: `${base}/_rels/unsafe.xml.rels`, content: '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.invalid/file" TargetMode="Ex&#116;ernal"/></Relationships>' },
+        { name: `${base}/_rels/ole.xml.rels`, content: '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject" Target="hidden.xml"/></Relationships>' },
+        { name: `${base}/doctype.xml`, content: '<!DOCTYPE x [<!ENTITY payload SYSTEM "file:///private">]><x>&payload;</x>' },
+        { name: `${base}/_rels/shadow.xml.rels`, content: '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships" xmlns:f="urn:fake"><Relationship Id="rId2" Type="hyperlink" Target="relative-file" TargetMode="External" f:TargetMode="Internal" targetmode="Internal"/></Relationships>' },
+      ]) {
+        const path = await fixture(await officePackage(format, [entry]));
+        await expect(validateFile(path, `lesson.${format}`, type.mime), entry.name).rejects.toMatchObject({ status: 415 });
+      }
+    });
+  }
   it('normalizes the final extension and rejects control characters, unknown names and executables', () => {
     for (const name of ['Bài giảng.PDF', 'answer.py', 'notes.xlsx']) expect(allowedName(name)).toBe(true);
     for (const name of ['answer', 'answer.exe', 'answer.pdf.exe', 'answer.pdf ', 'answer\n.pdf', 'answer.docm']) expect(allowedName(name)).toBe(false);

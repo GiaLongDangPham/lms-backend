@@ -10,6 +10,8 @@ import { createApp } from '../src/app.js';
 import { seedIds as id } from '../scripts/lib/seed-data.js';
 import { FileService } from '../src/modules/materials/file.service.js';
 import type { ObjectStorage } from '../src/modules/materials/storage.js';
+import type { UploadLimits } from '../src/modules/materials/upload-limits.js';
+import { officePackage, officeTypes, type OfficeFormat } from './helpers/office-package.js';
 
 const testUrl = process.env.B1_TEST_DATABASE_URL;
 const pool = new pg.Pool({ connectionString: testUrl, max: 6 });
@@ -24,7 +26,7 @@ const storage: ObjectStorage = {
 const config = { secret: randomBytes(32).toString('hex'), issuer: 'lms-test', audience: 'lms-test-fe',
   cookieSecure: false, cookieSameSite: 'lax' as const, origins: ['http://localhost:5173'] };
 const api = request(createApp({ corsOrigins: config.origins, checkDatabase: async () => {},
-  business: { pool, auth: config, storage, loginLimit: 100 } }));
+  business: { pool, auth: config, storage, loginLimit: 100, uploadLimits: { rateLimit: 1000 } } }));
 let teacher: string; let student: string; let other: string; let admin: string;
 const password = 'B1IntegrationPassword2026!';
 const spec = JSON.parse(await readFile('docs/openapi.json', 'utf8'));
@@ -46,6 +48,21 @@ async function upload(token = teacher, name = 'lesson.txt', content: string | Bu
 async function create(fileIds: string[], title = 'Week 02 material') {
   return api.post(`/api/classes/${id.classA}/materials`).auth(teacher, { type: 'bearer' })
     .send({ title, description: 'Lecture notes', fileIds });
+}
+
+function limitedApi(limits: Partial<UploadLimits>) {
+  return request(createApp({ corsOrigins: config.origins, checkDatabase: async () => {},
+    business: { pool, auth: config, storage, loginLimit: 100, uploadLimits: limits } }));
+}
+async function uploadActor() {
+  const userId = randomUUID(); const schoolCode = `QUOTA_${userId.replaceAll('-', '').toUpperCase()}`;
+  await pool.query(`INSERT INTO users(id,school_code,full_name,role,password_hash)
+    SELECT $1,$2,'Quota test teacher','TEACHER',password_hash FROM users WHERE id=$3`, [userId, schoolCode, id.teacher1]);
+  return { userId, schoolCode, token: await login(schoolCode) };
+}
+function limitedUpload(client: ReturnType<typeof limitedApi>, token: string, body = 'notes') {
+  return client.post('/api/files').auth(token, { type: 'bearer' })
+    .attach('file', Buffer.from(body), { filename: 'quota.txt', contentType: 'text/plain' });
 }
 
 describe.skipIf(!testUrl)('B2 materials, private files and B1 bulk enrollment', () => {
@@ -212,4 +229,91 @@ describe.skipIf(!testUrl)('B2 materials, private files and B1 bulk enrollment', 
     expect(response.body.items[0].status).toBe('NOT_FOUND');
     await pool.query('UPDATE users SET is_active=true WHERE id=$1', [id.student3]);
   });
+
+  it('rejects unsafe DOCX/XLSX/PPTX packages before creating metadata or objects', async () => {
+    const beforeRows = Number((await pool.query('SELECT count(*) FROM files')).rows[0].count);
+    const beforeObjects = objects.size;
+    for (const format of ['docx', 'xlsx', 'pptx'] as OfficeFormat[]) {
+      const type = officeTypes[format]; const base = type.main.split('/')[0]!;
+      for (const entry of [
+        { name: `${base}/payload.exe`, content: 'MZ executable' },
+        { name: `${base}/embeddings/oleObject1.bin`, content: Buffer.from('d0cf11e0a1b11ae1', 'hex') },
+        { name: `${base}/_rels/unsafe.xml.rels`, content: '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.invalid/payload" TargetMode="External"/></Relationships>' },
+      ]) {
+        const response = await upload(teacher, `unsafe.${format}`, await officePackage(format, [entry]), type.mime);
+        expect(response.status).toBe(415); expect(response.body.error.code).toBe('UNSUPPORTED_MEDIA_TYPE');
+      }
+    }
+    expect(Number((await pool.query('SELECT count(*) FROM files')).rows[0].count)).toBe(beforeRows);
+    expect(objects.size).toBe(beforeObjects);
+    for (const format of ['docx', 'xlsx', 'pptx'] as OfficeFormat[]) {
+      const valid = await upload(teacher, `safe.${format}`, await officePackage(format), officeTypes[format].mime);
+      expect(valid.status).toBe(201); contract('File', valid.body);
+    }
+  });
+
+  it('limits upload attempts per user across sessions without throttling another user on the same IP', async () => {
+    const actor = await uploadActor(); const otherActor = await uploadActor();
+    const anotherSession = await login(actor.schoolCode);
+    const client = limitedApi({ rateLimit: 2 });
+    expect((await limitedUpload(client, actor.token)).status).toBe(201);
+    expect((await limitedUpload(client, anotherSession)).status).toBe(201);
+    const rejected = await limitedUpload(client, actor.token);
+    expect(rejected.status).toBe(429); expect(rejected.body.error.code).toBe('UPLOAD_RATE_LIMITED');
+    expect(Number(rejected.headers['retry-after'])).toBeGreaterThan(0);
+    expect((await limitedUpload(client, otherActor.token)).status).toBe(201);
+    expect((await client.get('/api/health')).status).toBe(200);
+  }, 30000);
+
+  it('also counts rejected file validation attempts toward the upload rate limit', async () => {
+    const actor = await uploadActor(); const client = limitedApi({ rateLimit: 1 });
+    const invalid = await client.post('/api/files').auth(actor.token, { type: 'bearer' })
+      .attach('file', Buffer.from('invalid'), { filename: 'payload.exe', contentType: 'application/octet-stream' });
+    expect(invalid.status).toBe(415);
+    expect((await limitedUpload(client, actor.token)).body.error.code).toBe('UPLOAD_RATE_LIMITED');
+  }, 30000);
+
+  it('reserves pending file count atomically under concurrent uploads before writing objects', async () => {
+    const actor = await uploadActor(); const otherActor = await uploadActor();
+    const client = limitedApi({ rateLimit: 1000, pendingMaxFiles: 2, pendingMaxBytes: 1000 });
+    const secondInstance = limitedApi({ rateLimit: 1000, pendingMaxFiles: 2, pendingMaxBytes: 1000 });
+    const beforeObjects = objects.size;
+    const results = await Promise.all([limitedUpload(client, actor.token), limitedUpload(secondInstance, actor.token), limitedUpload(client, actor.token)]);
+    expect(results.map(result => result.status).sort()).toEqual([201, 201, 429]);
+    expect(results.find(result => result.status === 429)!.body.error.code).toBe('UPLOAD_QUOTA_EXCEEDED');
+    expect((await pool.query("SELECT count(*) FROM files WHERE uploaded_by=$1 AND lifecycle_status='PENDING'", [actor.userId])).rows[0].count).toBe('2');
+    expect(objects.size).toBe(beforeObjects + 2);
+    expect((await limitedUpload(client, otherActor.token)).status).toBe(201);
+  }, 30000);
+
+  it('enforces pending byte quota including the exact boundary', async () => {
+    const actor = await uploadActor();
+    const client = limitedApi({ rateLimit: 1000, pendingMaxFiles: 20, pendingMaxBytes: 10 });
+    expect((await limitedUpload(client, actor.token, '123456')).status).toBe(201);
+    expect((await limitedUpload(client, actor.token, '12345')).body.error.code).toBe('UPLOAD_QUOTA_EXCEEDED');
+    expect((await limitedUpload(client, actor.token, '1234')).status).toBe(201);
+    expect((await limitedUpload(client, actor.token, '1')).status).toBe(429);
+    expect((await pool.query('SELECT sum(size_bytes) AS bytes FROM files WHERE uploaded_by=$1', [actor.userId])).rows[0].bytes).toBe('10');
+    const concurrentActor = await uploadActor();
+    const concurrent = await Promise.all(Array.from({ length: 3 }, () => limitedUpload(client, concurrentActor.token, '123456')));
+    expect(concurrent.map(result => result.status).sort()).toEqual([201, 429, 429]);
+    expect((await pool.query('SELECT sum(size_bytes) AS bytes FROM files WHERE uploaded_by=$1', [concurrentActor.userId])).rows[0].bytes).toBe('6');
+  }, 30000);
+
+  it('releases quota after attachment and retains failed-delete backlog until cleanup succeeds', async () => {
+    const actor = await uploadActor();
+    const client = limitedApi({ rateLimit: 1000, pendingMaxFiles: 1 });
+    const first = await limitedUpload(client, actor.token); expect(first.status).toBe(201);
+    expect((await limitedUpload(client, actor.token)).status).toBe(429);
+    await pool.query('INSERT INTO class_teachers(class_id,teacher_id,assigned_by) VALUES($1,$2,$3)', [id.classA, actor.userId, id.admin]);
+    expect((await client.post(`/api/classes/${id.classA}/materials`).auth(actor.token, { type: 'bearer' })
+      .send({ title: 'Quota release', fileIds: [first.body.id] })).status).toBe(201);
+    failPut = true;
+    try { expect((await limitedUpload(client, actor.token)).status).toBe(503); }
+    finally { failPut = false; }
+    expect((await pool.query("SELECT count(*) FROM files WHERE uploaded_by=$1 AND lifecycle_status='DELETE_PENDING'", [actor.userId])).rows[0].count).toBe('1');
+    expect((await limitedUpload(client, actor.token)).body.error.code).toBe('UPLOAD_QUOTA_EXCEEDED');
+    await new FileService(pool, storage).cleanup();
+    expect((await limitedUpload(client, actor.token)).status).toBe(201);
+  }, 30000);
 });

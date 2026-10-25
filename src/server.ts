@@ -4,7 +4,7 @@ import { checkDatabase, pool } from './database/pool.js';
 import { createS3Storage } from './modules/materials/storage.js';
 
 const app = createApp({ corsOrigins: env.corsOrigins, checkDatabase,
-  business: { pool, auth: { ...env.auth, origins: env.authOrigins }, storage: createS3Storage() } });
+  business: { pool, auth: { ...env.auth, origins: env.authOrigins }, storage: createS3Storage(), uploadLimits: env.uploadLimits } });
 const server = app.listen(env.port, env.host, () => {
   console.info(`LMS API listening on http://${env.host}:${env.port}`);
 });

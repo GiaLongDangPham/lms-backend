@@ -1,5 +1,6 @@
 import { Router, type Request, type RequestHandler } from 'express';
 import { z } from 'zod';
+import { rateLimit } from 'express-rate-limit';
 import busboy from 'busboy';
 import { createWriteStream } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -13,6 +14,7 @@ import { MaterialService } from './material.service.js';
 import { FileService } from './file.service.js';
 import type { ObjectStorage } from './storage.js';
 import { maxFileBytes } from './file-policy.js';
+import { defaultUploadLimits, type UploadLimits } from './upload-limits.js';
 
 const fileIds = z.array(uuid).max(10).refine(ids => new Set(ids).size === ids.length);
 const input = z.object({ title: nonempty, description: z.string().max(10000).nullable().optional(), fileIds }).strict();
@@ -53,16 +55,21 @@ async function receive(req: Request, path: string) {
   return { name, mime };
 }
 
-export function createMaterialRouter(pool: pg.Pool, config: AuthConfig, storage?: ObjectStorage) {
+export function createMaterialRouter(pool: pg.Pool, config: AuthConfig, storage?: ObjectStorage,
+  configuredLimits: Partial<UploadLimits> = {}) {
   const router = Router(); const auth = createAuth(pool, config);
-  const materials = new MaterialService(pool); const files = new FileService(pool, storage);
+  const limits = { ...defaultUploadLimits, ...configuredLimits };
+  const materials = new MaterialService(pool); const files = new FileService(pool, storage, limits);
+  const uploadLimiter = rateLimit({ windowMs: limits.rateWindowMs, limit: limits.rateLimit,
+    keyGenerator: req => getPrincipal(req).user.id, standardHeaders: 'draft-8', legacyHeaders: false,
+    message: { error: { code: 'UPLOAD_RATE_LIMITED', message: 'Too many upload attempts. Try again later.' } } });
   // Apply middleware only on this module's paths; do not intercept unrelated routes.
   const requireMember: RequestHandler = (req, _res, next) => {
     if (getPrincipal(req).user.role === 'ADMIN') throw new ApiError(403, 'FORBIDDEN', 'This module is available to teachers and students.');
     next();
   };
   const guards = [auth.authenticate, requireChangedPassword, requireMember];
-  router.post('/files', ...guards, async (req, res) => {
+  router.post('/files', ...guards, uploadLimiter, async (req, res) => {
     const principal = getPrincipal(req);
     const directory = await mkdtemp(join(tmpdir(), 'lms-upload-'));
     try {

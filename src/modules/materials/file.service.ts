@@ -7,10 +7,12 @@ import type { FileRow } from '../assignments/assignment.repository.js';
 import type { ObjectStorage } from './storage.js';
 import { fileDto } from './material.service.js';
 import { validateFile } from './file-policy.js';
+import { defaultUploadLimits, type UploadLimits } from './upload-limits.js';
 
 interface StoredFile extends FileRow { object_key: string; storage_container: string; storage_provider: string }
 export class FileService {
-  constructor(private pool: pg.Pool, private storage?: ObjectStorage) {}
+  constructor(private pool: pg.Pool, private storage?: ObjectStorage,
+    private quota: Pick<UploadLimits, 'pendingMaxFiles' | 'pendingMaxBytes'> = defaultUploadLimits) {}
   private configured() {
     if (!this.storage) throw new ApiError(503, 'STORAGE_UNAVAILABLE', 'Private file storage is not configured.');
     return this.storage;
@@ -21,9 +23,19 @@ export class FileService {
     const { size, mime } = await validateFile(path, name, declared);
     // Persist the intended object first, so storage/DB failures always leave a retryable cleanup record.
     const id = randomUUID(); const key = `${principal.user.id}/${id}`;
-    const row = (await this.pool.query<FileRow>(`INSERT INTO files(id,storage_provider,storage_container,object_key,original_name,
-      mime_type,size_bytes,uploaded_by,lifecycle_status) VALUES($1,'S3',$2,$3,$4,$5,$6,$7,'PENDING') RETURNING *`,
-    [id, storage.bucket, key, name, mime, size, principal.user.id])).rows[0]!;
+    const row = await transaction(this.pool, async db => {
+      // Serialize reservations across sessions/processes before allocating an object in storage.
+      await db.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [principal.user.id]);
+      const usage = (await db.query<{ count: string; bytes: string }>(`SELECT count(*) AS count,
+        COALESCE(sum(size_bytes),0) AS bytes FROM files WHERE uploaded_by=$1
+        AND lifecycle_status IN ('PENDING','DELETE_PENDING')`, [principal.user.id])).rows[0]!;
+      if (Number(usage.count) >= this.quota.pendingMaxFiles || Number(usage.bytes) + size > this.quota.pendingMaxBytes) {
+        throw new ApiError(429, 'UPLOAD_QUOTA_EXCEEDED', 'Pending upload quota exceeded. Finish saving existing uploads or wait for cleanup.');
+      }
+      return (await db.query<FileRow>(`INSERT INTO files(id,storage_provider,storage_container,object_key,original_name,
+        mime_type,size_bytes,uploaded_by,lifecycle_status) VALUES($1,'S3',$2,$3,$4,$5,$6,$7,'PENDING') RETURNING *`,
+      [id, storage.bucket, key, name, mime, size, principal.user.id])).rows[0]!;
+    });
     try {
       await storage.put(key, path, size);
       return fileDto(row);
