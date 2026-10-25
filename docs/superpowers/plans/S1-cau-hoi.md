@@ -1,5 +1,8 @@
 # Các câu hỏi mang vào kickoff và checkpoint
 
+Đầu mối **S1**; các câu hỏi D1/B1 chuyển tiếp qua CP1/CP2.
+[Môi trường S1](../specs/S1-moi-truong.md) · [Thiết kế D1](../specs/D1-database.md).
+
 ## Kickoff 12/10 · Kha, Long, Nam, Khang, Cát
 
 1. Nam và Khang chạy được stack đã chọn chưa? Có vướng TypeScript/Docker không?

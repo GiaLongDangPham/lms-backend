@@ -10,4 +10,5 @@ Tạo thư mục theo module: `auth`, `users`, `classes`, `materials`, `assignme
 
 Đăng ký router trong `src/app.ts`, trước middleware 404. Không truy vấn DB trực tiếp
 trong route. DB schema/migration thuộc D1; hợp đồng nghiệp vụ thuộc D2 do Nam soạn,
-Long duyệt tại CP1. Khung hiện tại chỉ có endpoint hạ tầng của S1.
+Long duyệt tại CP1. Hiện có B1 tài khoản/lớp, assignments, assessment và materials.
+`materials` gồm HTTP routes, service tài liệu/file, chính sách Q08 và adapter S3.

@@ -1,6 +1,7 @@
 import express, { type ErrorRequestHandler } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import { TextDecoder } from 'node:util';
 import type pg from 'pg';
 import { createB1Router } from './modules/b1/router.js';
 import { EnrollmentRepository } from './modules/b1/enrollment.repository.js';
@@ -12,11 +13,14 @@ import { AssessmentRepository } from './modules/assessment/assessment.repository
 import { createAssessmentRouter } from './modules/assessment/assessment.routes.js';
 import { AssessmentService } from './modules/assessment/service.js';
 import { createAssignmentRouter } from './modules/assignments/assignment.routes.js';
+import { createMaterialRouter } from './modules/materials/material.routes.js';
+import type { ObjectStorage } from './modules/materials/storage.js';
+import type { UploadLimits } from './modules/materials/upload-limits.js';
 
 interface AppDependencies {
   corsOrigins: string[];
   checkDatabase: () => Promise<void>;
-  business?: { pool: pg.Pool; auth: AuthConfig; loginLimit?: number };
+  business?: { pool: pg.Pool; auth: AuthConfig; loginLimit?: number; storage?: ObjectStorage; uploadLimits?: Partial<UploadLimits> };
 }
 
 export function createApp({ corsOrigins, checkDatabase, business }: AppDependencies) {
@@ -29,7 +33,11 @@ export function createApp({ corsOrigins, checkDatabase, business }: AppDependenc
       callback(null, !origin || corsOrigins.includes(origin));
     },
   }));
-  app.use(express.json({ limit: '1mb' }));
+  app.use(express.json({ limit: '1mb', verify(_request, _response, bytes, encoding) {
+    if (encoding !== 'utf-8') throw new ApiError(415, 'UNSUPPORTED_CHARSET', 'JSON requests must use UTF-8.');
+    try { new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+    catch { throw new ApiError(400, 'INVALID_ENCODING', 'Request JSON must contain valid UTF-8 bytes.'); }
+  } }));
 
   app.get('/api/health', (_request, response) => {
     response.json({ status: 'ok', service: 'lms-backend' });
@@ -53,6 +61,7 @@ export function createApp({ corsOrigins, checkDatabase, business }: AppDependenc
     const enrollmentService = new EnrollmentService(new EnrollmentRepository(business.pool), assessmentService);
     app.use('/api', createDocsRouter());
     app.use('/api', createB1Router(business.pool, business.auth, enrollmentService, business.loginLimit));
+    app.use('/api', createMaterialRouter(business.pool, business.auth, business.storage, business.uploadLimits));
     app.use('/api', createAssignmentRouter(business.pool, business.auth));
     app.use('/api', createAssessmentRouter(business.pool, business.auth, assessmentService));
   }
@@ -63,6 +72,7 @@ export function createApp({ corsOrigins, checkDatabase, business }: AppDependenc
   });
 
   const errorHandler: ErrorRequestHandler = (error: unknown, _request, response, _next) => {
+    if (response.headersSent) { _next(error); return; }
     if (error instanceof ApiError) {
       const details = 'details' in error && typeof error.details === 'object' ? error.details : {};
       response.status(error.status).json({ error: { code: error.code, message: error.message, ...details } });

@@ -1,5 +1,8 @@
 # D1 · Kết quả kiểm tra local ngày 11/10/2026
 
+Bằng chứng lịch sử ngày 11/10, giữ nguyên kết quả đã ghi nhận.
+[Spec](../specs/D1-database.md) · [Plan](D1-database.md).
+
 Long đã chọn UUID, mã trường làm username và migration SQL dùng pg.
 Schema/seed được kiểm tra trên PostgreSQL 17 local; bản D1 còn chờ CP1 và review
 API/prototype, không coi kết quả dưới đây là đã hoàn thành toàn bộ D1.

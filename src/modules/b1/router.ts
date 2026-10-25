@@ -187,6 +187,12 @@ export function createB1Router(pool: pg.Pool, config: AuthConfig, enrollmentServ
     const result = await enrollmentService.enroll(getPrincipal(req), id, body.studentId);
     res.status(201).json(await enrollmentService.response(result));
   });
+  router.post('/classes/:id/enrollments/bulk', requireAdmin, async (req, res) => {
+    const id = parse(uuid, req.params.id);
+    const body = parse(z.object({ students: z.array(z.object({ row: z.number().int().positive(),
+      schoolCode }).strict()).min(1).max(500) }).strict(), req.body);
+    res.json(await enrollmentService.bulkEnroll(getPrincipal(req), id, body.students));
+  });
   router.patch('/classes/:id/enrollments/:enrollmentId', requireAdmin, async (req, res) => {
     const id = parse(uuid, req.params.id); const enrollmentId = parse(uuid, req.params.enrollmentId);
     const body = parse(z.object({ isActive: z.boolean() }).strict(), req.body);

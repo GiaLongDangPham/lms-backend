@@ -4,8 +4,8 @@ Long đã chọn SQL có phiên bản dùng pg. `0001` tạo 15 bảng nghiệp 
 hai bảng auth và trường đổi mật khẩu. `0003_client_rules.sql` thêm lịch sử điểm,
 định danh kết quả theo bài tập/ghi danh, điểm tự động khi không nộp, cột note nội bộ
 và mã học phần. `0004_b3_assignments_submissions.sql` áp dụng precision hai chữ số,
-lifecycle file và giới hạn attachment cho B3. [ERD](../../docs/database-erd.md) hiện có 18 bảng, chưa tính
-`schema_migrations`. Các rule còn mở nằm trong [D1-decisions.md](../../docs/D1-decisions.md).
+lifecycle file và giới hạn attachment cho B3. [ERD](../../docs/superpowers/specs/D1-erd.md) hiện có 18 bảng, chưa tính
+`schema_migrations`. Các rule còn mở nằm trong [D1-quyet-dinh.md](../../docs/superpowers/specs/D1-quyet-dinh.md).
 
 ## Chạy local
 
@@ -23,6 +23,12 @@ Seed chỉ chạy trên host PostgreSQL localhost/127.0.0.1/::1 và NODE_ENV kh�
 không dùng seed này để tự đưa tài khoản demo lên staging.
 
 ## Runner và lịch sử
+
+Tuần 02 bổ sung `0006_b2_material_file_limit.sql`: kiểm tra dữ liệu cũ rồi thêm
+constraint deferred giới hạn 10 file/tài liệu theo Q08. Nếu tài liệu cũ có hơn
+10 file, migration dừng để nhóm xử lý dữ liệu; không tự xóa file. Các file
+0001–0005 được giữ nguyên. Bản thiết kế CP1 gọi phần sửa là “0002”, nhưng trong
+repo 0002 đã dành cho auth; các sửa L04/L14/L20 đã nằm trong 0003, không đổi số lại.
 
 - Đọc các file `NNNN_mo_ta.sql` theo thứ tự. Không dùng trùng số phiên bản.
 - Lưu tên file, SHA-256 và thời điểm áp dụng trong `schema_migrations` (bảng hạ tầng
@@ -95,4 +101,4 @@ migration/seed rồi kiểm tra lỗi ràng buộc, transaction, checksum và ch
 database tạm được chính lần chạy đó tạo mới được drop; database dự án được giữ.
 
 User DB chạy kiểm thử cần quyền CREATEDB (user Docker/CI hiện có quyền này).
-CI gọi lệnh này sau `db:migrate`. Xem [kết quả D1](../../docs/verification-D1.md).
+CI gọi lệnh này sau `db:migrate`. Xem [kết quả D1](../../docs/superpowers/plans/D1-kiem-tra.md).
