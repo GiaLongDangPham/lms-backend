@@ -3663,6 +3663,7 @@
       },
       "SaveDraftGradeRequest": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "gradedVersionNumber",
           "score"
@@ -3684,6 +3685,7 @@
               "string",
               "null"
             ],
+            "maxLength": 5000,
             "example": "Cần bổ sung nguồn tham khảo"
           }
         },
@@ -4605,7 +4607,8 @@
         "properties": {
           "score": {
             "type": "number",
-            "minimum": 0
+            "minimum": 0,
+            "multipleOf": 0.01
           },
           "feedback": {
             "type": [

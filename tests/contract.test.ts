@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import SwaggerParser from '@apidevtools/swagger-parser';
+import { Ajv2020 } from 'ajv/dist/2020.js';
 import { describe, expect, it } from 'vitest';
 
 describe('D2 OpenAPI contract', () => {
@@ -42,5 +43,17 @@ describe('D2 OpenAPI contract', () => {
     expect(descriptions.updateUser).toMatch(/active enrollment/i);
     expect(descriptions.updateUser).toContain('Published 0');
     expect(operations.some(({ operationId }) => /submission.*note|note.*submission|unpublish/i.test(operationId))).toBe(false);
+  });
+  it('matches runtime validation for B4 grade mutations', () => {
+    const spec = JSON.parse(readFileSync('docs/openapi.json', 'utf8'));
+    const ajv = new Ajv2020({ strict: false, allErrors: true });
+    const saveGrade = ajv.compile(spec.components.schemas.SaveDraftGradeRequest);
+    const correctUnsubmitted = ajv.compile(spec.components.schemas.CorrectUnsubmittedGradeRequest);
+
+    expect(saveGrade({ gradedVersionNumber: 1, score: 8.25, feedback: 'x'.repeat(5000) })).toBe(true);
+    expect(saveGrade({ gradedVersionNumber: 1, score: 8, feedback: 'x'.repeat(5001) })).toBe(false);
+    expect(saveGrade({ gradedVersionNumber: 1, score: 8, unexpected: true })).toBe(false);
+    expect(correctUnsubmitted({ score: 8.25, feedback: null })).toBe(true);
+    expect(correctUnsubmitted({ score: 8.001 })).toBe(false);
   });
 });
