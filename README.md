@@ -5,6 +5,12 @@ S1/D1 + B1 local: Express + TypeScript, PostgreSQL; đăng nhập JWT, tài kho�
 Long phụ trách S1/D1/B1/B2/B6 và tích hợp; Nam làm
 D2/B3/B4/B5. Nam review backend của Long; Long review backend của Nam.
 
+Cập nhật tuần 02 (25/10/2026): đã bổ sung B1 ghi danh hàng loạt và B2 tài liệu,
+upload/download riêng tư. [Spec D1/B1/B2/F2](docs/superpowers/specs/D1-B1-B2-F2-tuan-02.md)
+mô tả thiết kế và tiêu chí nghiệm thu; [implementation plan](docs/superpowers/plans/D1-B1-B2-F2-tuan-02.md)
+chứa checklist, evidence, cấu hình S3/cleanup và các bước staging/review còn lại.
+Xem [mục lục specs/plans](docs/superpowers/README.md) để theo dõi cùng team.
+
 ## Chạy local
 
 Yêu cầu: Node.js 22 (tối thiểu 22.13), npm, Git. PostgreSQL 17 qua Docker Desktop
@@ -84,8 +90,9 @@ và thêm API sửa điểm không có bài nộp: tổng 48 operation trong con
 API thật hiện có B1, B3 assignment/submission và các route chấm/công bố/lịch sử;
 ghi danh mới hoặc kích hoạt lại sau công bố cũng tạo kết quả 0 Published còn thiếu
 trong cùng transaction. API không trả thông tin người công bố toàn bài.
-Upload/download S3, tài liệu, thông báo/comment và bulk enrollment trong contract
-vẫn dành cho các module tiếp theo, chưa phải API đã triển khai.
+Upload/download S3, tài liệu và bulk enrollment đã triển khai trong B1/B2.
+Thông báo/comment còn dành cho các module tiếp theo. Upload/download cần cấu hình
+private bucket; thiếu cấu hình hoặc storage lỗi trả `503 STORAGE_UNAVAILABLE`.
 JSON dùng camelCase; danh sách trả `{ items, page: { nextCursor } }`, query
 `limit` (1–100, mặc định 20) và `cursor` từ trang trước. Không dùng offset/page number.
 
@@ -257,14 +264,14 @@ Dừng DB bằng `docker compose stop`; tiếp tục bằng `docker compose up -
 
 ## Tài liệu tiếp theo
 
-- [Quyết định kỹ thuật](docs/technical-decisions.md)
-- [Checklist chuẩn bị và S1](docs/S1-checklist.md)
-- [Câu hỏi kickoff/CP1/CP2](docs/kickoff-questions.md)
-- [D1: thiết kế database nháp](docs/database-design.md)
-- ERD: [PlantUML](database/diagrams/lms-erd.puml) · [Mermaid](database/diagrams/lms-erd.mmd) · [SVG](database/diagrams/lms-erd.svg) · [chú thích](docs/database-erd.md)
-- [D1: quyết định cần chốt](docs/D1-decisions.md)
-- [D1: checklist và bàn giao](docs/D1-checklist.md)
-- [D1: kết quả kiểm tra](docs/verification-D1.md)
+- [Quyết định kỹ thuật](docs/superpowers/specs/S1-moi-truong.md)
+- [Checklist chuẩn bị và S1](docs/superpowers/plans/S1-moi-truong.md)
+- [Câu hỏi kickoff/CP1/CP2](docs/superpowers/plans/S1-cau-hoi.md)
+- [D1: thiết kế database nháp](docs/superpowers/specs/D1-database.md)
+- ERD: [PlantUML](database/diagrams/lms-erd.puml) · [Mermaid](database/diagrams/lms-erd.mmd) · [SVG](database/diagrams/lms-erd.svg) · [chú thích](docs/superpowers/specs/D1-erd.md)
+- [D1: quyết định cần chốt](docs/superpowers/specs/D1-quyet-dinh.md)
+- [D1: checklist và bàn giao](docs/superpowers/plans/D1-database.md)
+- [D1: kết quả kiểm tra](docs/superpowers/plans/D1-kiem-tra.md)
 - [Hướng dẫn migration/seed](database/migrations/README.md)
 - [Hướng dẫn chia module](src/modules/README.md)
 - [D2: bản review CP1 gốc và hướng dẫn mock](docs/D2-review.md)

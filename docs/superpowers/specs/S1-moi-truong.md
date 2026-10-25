@@ -1,5 +1,8 @@
 # Quyết định kỹ thuật khởi động · 11/10/2026
 
+Task: **S1** · [Kế hoạch/checklist](../plans/S1-moi-truong.md) ·
+[Kiểm tra local](../plans/S1-kiem-tra.md) · [Câu hỏi cần chốt](../plans/S1-cau-hoi.md).
+
 ## Đã được Long chốt trong trao đổi ngày 11/10
 
 | Hạng mục | Quyết định |

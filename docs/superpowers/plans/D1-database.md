@@ -1,5 +1,8 @@
 # D1 · Checklist và bàn giao
 
+[Spec database](../specs/D1-database.md) · [Quyết định](../specs/D1-quyet-dinh.md) ·
+[ERD](../specs/D1-erd.md) · [Kết quả kiểm tra](D1-kiem-tra.md).
+
 Long · baseline 14–15/10/2026, 8 giờ · CP1 ngày 15/10.
 Chuẩn bị sớm ngày 11/10 không có nghĩa D1/S1 đã hoàn thành hoặc đã tiêu hết 8 giờ.
 
@@ -58,6 +61,6 @@ Không đánh dấu D1 Done chỉ vì ERD đã vẽ. Rule nộp lại/Late còn 
 - Long ghi Timesheet đúng ngày/giờ thực tế với mã D1; không tự ghi 8 giờ kế hoạch
   thành giờ thực tế và không sửa Baseline.
 
-Tài liệu: [thiết kế](database-design.md) · [ERD](database-erd.md) ·
-[quyết định](D1-decisions.md) · [kết quả kiểm tra](verification-D1.md).
+Tài liệu: [thiết kế](../specs/D1-database.md) · [ERD](../specs/D1-erd.md) ·
+[quyết định](../specs/D1-quyet-dinh.md) · [kết quả kiểm tra](D1-kiem-tra.md).
 Sau D1/CP1, chuyển sang B1 ngày 16–20/10.

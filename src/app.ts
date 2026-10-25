@@ -12,11 +12,13 @@ import { AssessmentRepository } from './modules/assessment/assessment.repository
 import { createAssessmentRouter } from './modules/assessment/assessment.routes.js';
 import { AssessmentService } from './modules/assessment/service.js';
 import { createAssignmentRouter } from './modules/assignments/assignment.routes.js';
+import { createMaterialRouter } from './modules/materials/material.routes.js';
+import type { ObjectStorage } from './modules/materials/storage.js';
 
 interface AppDependencies {
   corsOrigins: string[];
   checkDatabase: () => Promise<void>;
-  business?: { pool: pg.Pool; auth: AuthConfig; loginLimit?: number };
+  business?: { pool: pg.Pool; auth: AuthConfig; loginLimit?: number; storage?: ObjectStorage };
 }
 
 export function createApp({ corsOrigins, checkDatabase, business }: AppDependencies) {
@@ -53,6 +55,7 @@ export function createApp({ corsOrigins, checkDatabase, business }: AppDependenc
     const enrollmentService = new EnrollmentService(new EnrollmentRepository(business.pool), assessmentService);
     app.use('/api', createDocsRouter());
     app.use('/api', createB1Router(business.pool, business.auth, enrollmentService, business.loginLimit));
+    app.use('/api', createMaterialRouter(business.pool, business.auth, business.storage));
     app.use('/api', createAssignmentRouter(business.pool, business.auth));
     app.use('/api', createAssessmentRouter(business.pool, business.auth, assessmentService));
   }
@@ -63,6 +66,7 @@ export function createApp({ corsOrigins, checkDatabase, business }: AppDependenc
   });
 
   const errorHandler: ErrorRequestHandler = (error: unknown, _request, response, _next) => {
+    if (response.headersSent) { _next(error); return; }
     if (error instanceof ApiError) {
       const details = 'details' in error && typeof error.details === 'object' ? error.details : {};
       response.status(error.status).json({ error: { code: error.code, message: error.message, ...details } });

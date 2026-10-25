@@ -4,8 +4,8 @@ Cập nhật: 24/10/2026. Long đã chốt mã trường để đăng nhập, UU
 phiên bản dùng pg và mô hình lớp ở L20. Nhóm đã chốt thêm Q05-Q08 cho bài tập, bài
 nộp, điểm và file. Các phần khác vẫn chờ duyệt.
 
-Thiết kế để review: [database-design.md](database-design.md) và
-[database-erd.md](database-erd.md). Kha ghi quyết định nghiệp vụ vào Client Log/biên
+Thiết kế để review: [D1-database.md](D1-database.md) và
+[D1-erd.md](D1-erd.md). Kha ghi quyết định nghiệp vụ vào Client Log/biên
 bản; Nam cập nhật OpenAPI; Long cập nhật schema. Không cần gửi thông báo thay nhóm.
 
 ## Chốt kỹ thuật trước
