@@ -3,10 +3,14 @@ import cors from 'cors';
 import helmet from 'helmet';
 import type pg from 'pg';
 import { createB1Router } from './modules/b1/router.js';
+import { EnrollmentRepository } from './modules/b1/enrollment.repository.js';
+import { EnrollmentService } from './modules/b1/enrollment.service.js';
 import { createDocsRouter } from './modules/b1/docs.js';
 import { ApiError } from './modules/b1/common.js';
 import type { AuthConfig } from './modules/b1/auth.js';
-import { createAssessmentRouter } from './modules/assessment/router.js';
+import { AssessmentRepository } from './modules/assessment/assessment.repository.js';
+import { createAssessmentRouter } from './modules/assessment/assessment.routes.js';
+import { AssessmentService } from './modules/assessment/service.js';
 import { createAssignmentRouter } from './modules/assignments/assignment.routes.js';
 
 interface AppDependencies {
@@ -45,10 +49,12 @@ export function createApp({ corsOrigins, checkDatabase, business }: AppDependenc
   });
 
   if (business) {
+    const assessmentService = new AssessmentService(new AssessmentRepository(business.pool));
+    const enrollmentService = new EnrollmentService(new EnrollmentRepository(business.pool), assessmentService);
     app.use('/api', createDocsRouter());
-    app.use('/api', createB1Router(business.pool, business.auth, business.loginLimit));
+    app.use('/api', createB1Router(business.pool, business.auth, enrollmentService, business.loginLimit));
     app.use('/api', createAssignmentRouter(business.pool, business.auth));
-    app.use('/api', createAssessmentRouter(business.pool, business.auth));
+    app.use('/api', createAssessmentRouter(business.pool, business.auth, assessmentService));
   }
   app.use((_request, response) => {
     response.status(404).json({

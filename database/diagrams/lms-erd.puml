@@ -1,6 +1,6 @@
 @startuml lms-erd
 !pragma layout smetana
-title LMS - schema 0001-0003 (17/10/2026)
+title LMS - schema 0001-0005 (24/10/2026)
 hide circle
 skinparam linetype ortho
 skinparam entity {
@@ -59,6 +59,7 @@ entity "assignments" as ASSIGNMENTS {
   deadline_at : timestamptz
   max_score : numeric
   results_published_at : timestamptz / NULL until assignment-wide publication
+  results_published_by : uuid <<FK>> / NULL until publication; DB only
 }
 
 entity "submissions" as SUBMISSIONS {
@@ -177,6 +178,7 @@ CLASSES ||..o{ MATERIALS : contains
 USERS ||..o{ MATERIALS : authors
 CLASSES ||..o{ ASSIGNMENTS : contains
 USERS ||..o{ ASSIGNMENTS : authors
+USERS |o..o{ ASSIGNMENTS : publishes_results
 ASSIGNMENTS ||..o{ SUBMISSIONS : receives
 ENROLLMENTS ||..o{ SUBMISSIONS : owns
 SUBMISSIONS ||--o{ SUBMISSION_VERSIONS : retains_history
@@ -207,6 +209,7 @@ SUBMISSIONS |o..o{ COMMENTS : discussed_in
 legend bottom
   16 business tables + 2 authentication tables; schema_migrations omitted.
   grades: UNIQUE(assignment_id, enrollment_id); submission/version may both be NULL.
+  assignments: results_published_by and results_published_at are paired, write-once provenance.
   classes: UNIQUE(course_code, code, term). grade_history: append-only snapshots.
   AUTO_ZERO_NO_SUBMISSION: score 0, Published, no fake submission.
   PK = primary key; FK = foreign key; UK = unique.

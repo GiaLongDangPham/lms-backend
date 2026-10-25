@@ -4,6 +4,10 @@ import { AssignmentRepository, type AssignmentRow, type Db, type FileRow } from 
 
 const MiB = 1024 * 1024;
 
+export function isAfterDeadline(submittedAt: Date, deadlineAt: Date): boolean {
+  return submittedAt.getTime() > deadlineAt.getTime();
+}
+
 export interface AssignmentInput {
   title: string; description?: string | null; deadlineAt: Date; maxScore: number; fileIds?: string[];
 }
@@ -97,9 +101,13 @@ export class AssignmentService {
   async update(principal: Principal, assignmentId: string, input: AssignmentUpdate) {
     this.teacher(principal);
     return transaction(this.repository.db(), async db => {
-      const current = await this.repository.findAssignment(db, assignmentId, true);
-      if (!current) throw new ApiError(404, 'NOT_FOUND', 'Assignment was not found.');
-      await requireClassAccess(db, principal, current.class_id, true);
+      const initial = await this.repository.findAssignment(db, assignmentId);
+      if (!initial) throw new ApiError(404, 'NOT_FOUND', 'Assignment was not found.');
+      await requireClassAccess(db, principal, initial.class_id, true);
+      const current = await this.repository.lockAssignmentInClass(db, assignmentId, initial.class_id);
+      if (!current) {
+        throw new ApiError(404, 'NOT_FOUND', 'Assignment was not found.');
+      }
       if (input.fileIds) {
         const retained = await this.repository.assignmentFileIds(db, assignmentId);
         await this.validatePendingFiles(db, input.fileIds.filter(id => !retained.includes(id)), principal.user.id);
@@ -118,7 +126,8 @@ export class AssignmentService {
     const versions = await this.repository.submissionVersions(db, submissionId);
     const files = await this.repository.submissionFiles(db, submissionId);
     const grade = await this.repository.gradeSummary(db, submissionId);
-    const deadlineLocked = versions.length > 0 && await this.repository.serverTime(db) > assignment.deadline_at;
+    const deadlineLocked = versions.length > 0 &&
+      isAfterDeadline(await this.repository.serverTime(db), assignment.deadline_at);
     const user = await this.repository.userSummary(db, submission.student_id);
     const dto: Record<string, unknown> = {
       id: submission.id, assignmentId: submission.assignment_id,
@@ -127,10 +136,10 @@ export class AssignmentService {
       versions: versions.map(version => ({ versionNumber: version.version_number,
         submittedAt: version.submitted_at.toISOString(),
         deadlineAtSubmission: version.deadline_at_submission.toISOString(),
-        isLate: version.submitted_at > version.deadline_at_submission,
+        isLate: isAfterDeadline(version.submitted_at, version.deadline_at_submission),
         files: files.filter(file => file.version_number === version.version_number).map(file => this.fileDto(file)) })),
-      canSubmit: !grade && !deadlineLocked,
-      lockedReason: grade ? 'GRADED' : deadlineLocked ? 'DEADLINE_PASSED' : null,
+      canSubmit: !grade && !assignment.results_published_at && !deadlineLocked,
+      lockedReason: grade || assignment.results_published_at ? 'GRADED' : deadlineLocked ? 'DEADLINE_PASSED' : null,
       createdAt: submission.created_at.toISOString(),
     };
     if (includeGrade) dto.grade = grade ? { status: grade.status, source: grade.source,
@@ -141,9 +150,13 @@ export class AssignmentService {
   async submit(principal: Principal, assignmentId: string, fileIds: string[]) {
     this.student(principal);
     const submissionId = await transaction(this.repository.db(), async db => {
-      const assignment = await this.repository.findAssignment(db, assignmentId, true);
-      if (!assignment) throw new ApiError(404, 'NOT_FOUND', 'Assignment was not found.');
-      await requireClassAccess(db, principal, assignment.class_id, true);
+      const initial = await this.repository.findAssignment(db, assignmentId);
+      if (!initial) throw new ApiError(404, 'NOT_FOUND', 'Assignment was not found.');
+      await requireClassAccess(db, principal, initial.class_id, true);
+      const assignment = await this.repository.lockAssignmentInClass(db, assignmentId, initial.class_id);
+      if (!assignment) {
+        throw new ApiError(404, 'NOT_FOUND', 'Assignment was not found.');
+      }
       const enrollment = await this.repository.activeEnrollment(db, assignment.class_id, principal.user.id, true);
       if (!enrollment) throw new ApiError(404, 'NOT_FOUND', 'Active enrollment is required.');
       const existing = await this.repository.findSubmissionForStudent(db, assignmentId, principal.user.id, true);
@@ -157,7 +170,7 @@ export class AssignmentService {
       const total = files.reduce((sum, file) => sum + Number(file.size_bytes), 0);
       if (total > 100 * MiB) throw new ApiError(413, 'PAYLOAD_TOO_LARGE', 'Submission files exceed 100 MiB.');
       const submittedAt = await this.repository.serverTime(db);
-      if (existing && submittedAt > assignment.deadline_at) {
+      if (existing && isAfterDeadline(submittedAt, assignment.deadline_at)) {
         throw new ApiError(409, 'DEADLINE_LOCKS_RESUBMISSION', 'Extend the deadline before submitting a new version.');
       }
       const id = existing?.id ?? await this.repository.ensureSubmission(db, assignmentId, enrollment.id);

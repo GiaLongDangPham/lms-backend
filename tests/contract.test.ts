@@ -18,4 +18,29 @@ describe('D2 OpenAPI contract', () => {
     expect(spec.components.schemas.LoginResult.properties.refreshToken).toBeUndefined();
     expect(spec.components.schemas.User.properties.passwordHash).toBeUndefined();
   });
+  it('documents published zeroes for enrollments without expanding the public API', () => {
+    const spec = JSON.parse(readFileSync('docs/openapi.json', 'utf8'));
+    const paths = spec.paths as Record<string, Record<string, { operationId?: string; description?: string }>>;
+    const operations = Object.values(paths).flatMap((path) =>
+      Object.values(path).filter((operation): operation is { operationId: string; description?: string } =>
+        typeof operation.operationId === 'string'),
+    );
+    expect(operations).toHaveLength(48);
+    const descriptions = Object.fromEntries(
+      operations.map(({ operationId, description }) => [operationId, description ?? '']),
+    );
+    const enrollmentRule = /assignments already published[\s\S]*atomically[\s\S]*missing[\s\S]*0/i;
+    for (const operationId of ['enrollStudent', 'updateEnrollment']) {
+      expect(descriptions[operationId]).toMatch(enrollmentRule);
+      expect(descriptions[operationId]).toMatch(/preserv(?:e|es|ing)[\s\S]*(?:grade|history)/i);
+      expect(descriptions[operationId]).toContain('AUTO_ZERO_NO_SUBMISSION');
+      expect(descriptions[operationId]).toMatch(/no submission/i);
+      expect(descriptions[operationId]).toMatch(/locked/i);
+    }
+    expect(descriptions.publishAssignmentGrades).toMatch(enrollmentRule);
+    expect(descriptions.updateUser).toMatch(/reactivating[\s\S]*STUDENT account/i);
+    expect(descriptions.updateUser).toMatch(/active enrollment/i);
+    expect(descriptions.updateUser).toContain('Published 0');
+    expect(operations.some(({ operationId }) => /submission.*note|note.*submission|unpublish/i.test(operationId))).toBe(false);
+  });
 });

@@ -81,7 +81,9 @@ Nguồn duy nhất: [docs/openapi.json](docs/openapi.json), lấy từ nhánh
 `docs/api-specification`, commit `532f9832d6384b95cca4504d36cfae4bff2a5390`.
 Giữ các phần mở rộng JWT/mật khẩu của B1, hợp nhất thay đổi nghiệp vụ D2 mới nhất
 và thêm API sửa điểm không có bài nộp: tổng 48 operation trong contract.
-API thật hiện có B1, B3 assignment/submission và các route chấm/công bố/lịch sử.
+API thật hiện có B1, B3 assignment/submission và các route chấm/công bố/lịch sử;
+ghi danh mới hoặc kích hoạt lại sau công bố cũng tạo kết quả 0 Published còn thiếu
+trong cùng transaction. API không trả thông tin người công bố toàn bài.
 Upload/download S3, tài liệu, thông báo/comment và bulk enrollment trong contract
 vẫn dành cho các module tiếp theo, chưa phải API đã triển khai.
 JSON dùng camelCase; danh sách trả `{ items, page: { nextCursor } }`, query
@@ -166,6 +168,11 @@ khi đánh dấu B1 Done. Chưa có kết quả GitHub CI cho các thay đổi l
   không công bố một phần. Thành công: SV/tài khoản active chưa nộp được 0, source
   `AUTO_ZERO_NO_SUBMISSION`, `submissionId`/`gradedVersionNumber` là null. Công bố
   đóng nộp bài và gọi lại không tạo trùng kết quả/lịch sử/thông báo của cùng cohort.
+  Ghi danh mới hoặc kích hoạt lại sau đó thêm kết quả 0 Published còn thiếu atomically,
+  giữ nguyên Grade/history đã có, không tạo submission/version giả và không mở khóa nộp.
+  Kích hoạt lại tài khoản STUDENT cũng backfill kết quả cho mọi enrollment đang active
+  và assignment đã Published trong cùng transaction; Grade/history cũ được giữ nguyên.
+  `assignments.results_published_by` lưu người công bố trong DB, không xuất hiện trong API.
 - **L04:** sửa điểm Published giữ Published, SV thấy ngay; trigger lưu snapshot
   score/feedback/trạng thái/nguồn/người/giờ và version đã chấm trong `grade_history`.
   Lịch sử bất biến, không UPDATE/DELETE. SV chỉ nhận các snapshot Published.
@@ -181,8 +188,9 @@ Khang/Cát cần tích hợp vào UI nghiệp vụ (repo frontend hiện mới c
 cho biết không có bài nộp; tách “chưa chấm” khỏi điểm 0; ẩn nút nộp khi bị khóa;
 thêm lịch sử sửa điểm, mã học phần/mô tả lớp. Mock tĩnh hỗ trợ
 schema ghép của danh sách bài nộp GV; dùng `X-Mock-Status: 409` để thử lỗi chặn công bố.
-Mock không mô phỏng auth, transaction hay lưu trạng thái. Deadline và độ chính xác
-điểm đã chốt ngày 24/10/2026; enrollment mới sau công bố và UI vẫn cần nghiệm thu.
+Mock không mô phỏng auth, transaction hay lưu trạng thái. Deadline, độ chính xác
+điểm và kết quả tự động khi ghi danh sau công bố đã chốt ngày 24/10/2026. Backend
+đã triển khai quy tắc ghi danh này; UI vẫn cần nghiệm thu.
 
 Kiểm tra local 17/10/2026: lint, TypeScript, build và 11 test nền đạt; `api:test`
 chạy riêng 21 test B1 + 10 test nghiệp vụ mới, có đối chiếu JSON Schema D2;

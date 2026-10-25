@@ -13,6 +13,7 @@ export interface AssignmentRow {
   created_at: Date;
   updated_at: Date;
   results_published_at: Date | null;
+  results_published_by: string | null;
 }
 
 export interface FileRow {
@@ -43,6 +44,12 @@ export class AssignmentRepository {
       `SELECT * FROM assignments WHERE id = $1 ${lock ? 'FOR UPDATE' : ''}`,
       [id],
     );
+    return result.rows[0];
+  }
+
+  async lockAssignmentInClass(db: Db, id: string, classId: string): Promise<AssignmentRow | undefined> {
+    const result = await db.query<AssignmentRow>(
+      'SELECT * FROM assignments WHERE id=$1 AND class_id=$2 FOR UPDATE', [id, classId]);
     return result.rows[0];
   }
 

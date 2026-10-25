@@ -113,11 +113,36 @@ describe.skipIf(!target)('B1/B3 client rules and assignments/submissions',()=>{
     const a=await assignment();const s=await submit(a);expect(s.status).toBe(201);
     expect((await grade(s.body.id)).status).toBe(200);
     const blocked=await submit(a);expect(blocked.status).toBe(409);expect(blocked.body.error.code).toBe('GRADE_LOCKS_SUBMISSION');
-    const view=await api.get(`/api/assignments/${a}/my-submission`).auth(student,{type:'bearer'});
-    expect(view.body.canSubmit).toBe(false);expect(view.text).not.toContain('Feedback private');expect(view.body.grade).toBeUndefined();
-    expect((await api.get(`/api/assignments/${a}/my-result`).auth(student,{type:'bearer'})).status).toBe(404);
-    const hist=await api.get(`/api/assignments/${a}/my-result/history`).auth(student,{type:'bearer'});
-    expect(hist.status).toBe(404);expect(hist.text).not.toContain('Feedback private');
+    const studentSubmission=await api.get(`/api/assignments/${a}/my-submission`).auth(student,{type:'bearer'});
+    expect(studentSubmission.body.canSubmit).toBe(false);expect(studentSubmission.text).not.toContain('Feedback private');
+    expect(studentSubmission.body).not.toHaveProperty('grade');
+    const studentResult=await api.get(`/api/assignments/${a}/my-result`).auth(student,{type:'bearer'});
+    expect(studentResult.status).toBe(404);expect(studentResult.text).not.toContain('Feedback private');
+    const studentHistory=await api.get(`/api/assignments/${a}/my-result/history`).auth(student,{type:'bearer'});
+    expect(studentHistory.status).toBe(404);expect(studentHistory.text).not.toContain('Feedback private');
+  });
+  it('restricts grade management to an assigned teacher without revealing foreign submissions',async()=>{
+    const a=await assignment();const s=await submit(a);expect(s.status).toBe(201);
+    const saved=await grade(s.body.id);expect(saved.status).toBe(200);expect(saved.body.score).toBe(8);
+    const read=await api.get(`/api/submissions/${s.body.id}/grade`).auth(teacher,{type:'bearer'});
+    expect(read.status).toBe(200);expect(read.body).toMatchObject({submissionId:s.body.id,score:8,status:'DRAFT'});
+
+    const foreignAssignment=(await pool.query<{id:string}>(`INSERT INTO assignments(class_id,title,deadline_at,max_score,created_by)
+      VALUES ($1,'Foreign grade fixture',now()+interval '1 day',10,$2) RETURNING id`,[id.classB,id.teacher2])).rows[0]!.id;
+    const foreignSubmission=(await pool.query<{id:string}>(`INSERT INTO submissions(assignment_id,enrollment_id)
+      VALUES ($1,$2) RETURNING id`,[foreignAssignment,id.enrollment3])).rows[0]!.id;
+    await pool.query(`INSERT INTO submission_versions(submission_id,version_number,submitted_at,deadline_at_submission)
+      VALUES ($1,1,now(),now()+interval '1 day')`,[foreignSubmission]);
+    const foreignTeacher=await api.get(`/api/submissions/${foreignSubmission}/grade`).auth(teacher,{type:'bearer'});
+    expect(foreignTeacher.status).toBe(404);
+    expect((await api.put(`/api/submissions/${foreignSubmission}/grade`).auth(teacher,{type:'bearer'})
+      .send({gradedVersionNumber:1,score:8})).status).toBe(404);
+
+    for(const token of [admin,student]){
+      expect((await api.get(`/api/submissions/${s.body.id}/grade`).auth(token,{type:'bearer'})).status).toBe(403);
+      expect((await api.put(`/api/submissions/${s.body.id}/grade`).auth(token,{type:'bearer'})
+        .send({gradedVersionNumber:1,score:9})).status).toBe(403);
+    }
   });
   it('publishes nothing if any submitted work is ungraded',async()=>{
     const a=await assignment();expect((await submit(a)).status).toBe(201);
@@ -189,10 +214,11 @@ describe.skipIf(!target)('B1/B3 client rules and assignments/submissions',()=>{
       await migrate(old,dir);
       await old.query(`INSERT INTO users(id,school_code,full_name,password_hash,role) VALUES
         ('${id.admin}','ADMIN001','Admin','fixture','ADMIN'),('${id.teacher1}','GV001','Teacher','fixture','TEACHER'),
+        ('${id.teacher2}','GV002','Teacher 2','fixture','TEACHER'),
         ('${id.student1}','SV001','Student','fixture','STUDENT');
         INSERT INTO classes(id,code,name,term,created_by) VALUES('${id.classA}','L01','Existing real class','2026-HK1','${id.admin}');
         INSERT INTO enrollments(id,class_id,student_id,enrolled_by) VALUES('${id.enrollment1}','${id.classA}','${id.student1}','${id.admin}');
-        INSERT INTO assignments(id,class_id,title,deadline_at,max_score,created_by) VALUES('${id.assignmentA}','${id.classA}','Legacy',now(),10,'${id.teacher1}');
+        INSERT INTO assignments(id,class_id,title,deadline_at,max_score,created_by) VALUES('${id.assignmentA}','${id.classA}','Legacy',now(),10,'${id.teacher2}');
         INSERT INTO submissions(id,assignment_id,enrollment_id) VALUES('${id.submission1}','${id.assignmentA}','${id.enrollment1}');
         INSERT INTO submission_versions VALUES('${id.submission1}',1,now(),now());
         INSERT INTO grades(submission_id,graded_version_number,score,feedback,status,graded_by,published_by,published_at)
@@ -204,14 +230,22 @@ describe.skipIf(!target)('B1/B3 client rules and assignments/submissions',()=>{
         INSERT INTO submission_versions VALUES('${id.submissionLate}',1,now(),now());
         INSERT INTO grades(submission_id,graded_version_number,score,graded_by) VALUES('${id.submissionLate}',1,7,'${id.teacher1}');
         INSERT INTO submission_versions VALUES('${id.submissionLate}',2,now(),now());`);
-      await expect(migrate(old)).rejects.toThrow(/CLASS_COURSE_MAPPING/);
+      for(const file of ['0003_client_rules.sql','0004_b3_assignments_submissions.sql'])await writeFile(path.join(dir,file),await readFile('database/migrations/'+file));
+      await expect(migrate(old,dir)).rejects.toThrow(/CLASS_COURSE_MAPPING/);
       expect((await old.query('SELECT version FROM schema_migrations')).rowCount).toBe(2);
       process.env.CLASS_COURSE_MAPPING=JSON.stringify({[id.classA]:'CO2013'});
-      expect(await migrate(old)).toEqual(['0003_client_rules.sql','0004_b3_assignments_submissions.sql']);
+      expect(await migrate(old,dir)).toEqual(['0003_client_rules.sql','0004_b3_assignments_submissions.sql']);
       const grade=await old.query('SELECT * FROM grades WHERE submission_id=$1',[id.submission1]);
       expect(Number(grade.rows[0].score)).toBe(8.5);expect(grade.rows[0].feedback).toBe('Old Published');expect(grade.rows[0].status).toBe('PUBLISHED');
       expect((await old.query('SELECT * FROM grade_history')).rowCount).toBe(2);
       expect((await old.query('SELECT course_code FROM classes')).rows[0].course_code).toBe('CO2013');
+      await old.query("UPDATE assignments SET results_published_at='2026-10-16T08:30:00Z' WHERE id=$1",[id.assignmentA]);
+      await writeFile(path.join(dir,'0005_assignment_publication_actor.sql'),await readFile('database/migrations/0005_assignment_publication_actor.sql'));
+      expect(await migrate(old,dir)).toEqual(['0005_assignment_publication_actor.sql']);
+      const assignmentRow=await old.query('SELECT results_published_at,results_published_by FROM assignments WHERE id=$1',[id.assignmentA]);
+      expect(assignmentRow.rows[0].results_published_by).toBe(id.teacher1);
+      await expect(old.query('UPDATE assignments SET results_published_by=$1 WHERE id=$2',
+        [id.teacher2,id.assignmentA])).rejects.toMatchObject({code:'23514'});
       const {hashPassword}=await import('../src/security/password.js');
       await old.query('UPDATE users SET password_hash=$1 WHERE id=$2',[await hashPassword('LegacyPassword2026!'),id.teacher1]);
       const legacyApi=request(createApp({corsOrigins:[],checkDatabase:async()=>{},business:{pool:old,auth:{
@@ -224,7 +258,7 @@ describe.skipIf(!target)('B1/B3 client rules and assignments/submissions',()=>{
       expect((await legacyApi.post(`/api/assignments/${id.assignmentLate}/grades/publish`).auth(token,{type:'bearer'})).status).toBe(200);
       const history=await old.query('SELECT score,graded_version_number FROM grade_history WHERE submission_id=$1 ORDER BY version',[id.submission1]);
       expect(history.rows.map(r=>[Number(r.score),r.graded_version_number])).toEqual([[8.5,1],[9,1]]);
-      expect(await migrate(old)).toEqual([]);
+      expect(await migrate(old,dir)).toEqual([]);
     }finally{
       if(previous===undefined)delete process.env.CLASS_COURSE_MAPPING;else process.env.CLASS_COURSE_MAPPING=previous;
       await old?.end();if(created&&/^lms_upgrade_[a-f0-9]{16}$/.test(name))await pool.query(`DROP DATABASE "${name}"`);

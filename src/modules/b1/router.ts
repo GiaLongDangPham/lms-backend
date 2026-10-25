@@ -6,6 +6,7 @@ import { hashPassword } from '../../security/password.js';
 import { createAuth, getPrincipal, requireAdmin, requireChangedPassword, requireClassAccess, type AuthConfig } from './auth.js';
 import { ApiError, classColumns, classDto, cursorId, email, enrollmentDto, nonempty, page, paging, parse,
   password, roles, schoolCode, transaction, userColumns, userDto, uuid, type User, type ClassRow, type EnrollmentRow } from './common.js';
+import type { EnrollmentService } from './enrollment.service.js';
 
 const createUser = z.object({ schoolCode, fullName: nonempty, email: email.optional(),
   role: z.enum(['TEACHER', 'STUDENT']), initialPassword: password }).strict();
@@ -15,10 +16,10 @@ const createClass = z.object({ code: nonempty.max(50), courseCode: schoolCode, n
   term: nonempty.max(50), description: z.string().max(5000).nullable().optional() }).strict();
 const updateClass = createClass.partial().refine(v => Object.keys(v).length > 0);
 
-export function createB1Router(pool: pg.Pool, config: AuthConfig, loginLimit = 10) {
+export function createB1Router(pool: pg.Pool, config: AuthConfig, enrollmentService: EnrollmentService, loginLimit = 10) {
   const router = Router();
   const auth = createAuth(pool, config);
-  async function enrollmentResponse(row: EnrollmentRow) {
+  async function rosterEnrollmentResponse(row: EnrollmentRow) {
     const result=await pool.query<User>(`SELECT ${userColumns} FROM users WHERE id=$1`,[row.student_id]);
     const u=result.rows[0]!;
     return {...enrollmentDto(row),student:{id:u.id,schoolCode:u.school_code,fullName:u.full_name,role:u.role}};
@@ -70,6 +71,9 @@ export function createB1Router(pool: pg.Pool, config: AuthConfig, loginLimit = 1
   router.patch('/users/:id', requireAdmin, async (req, res) => {
     const id = parse(uuid, req.params.id); const body = parse(updateUser, req.body);
     const user = await transaction(pool, async client => {
+      const activeEnrollments = body.isActive === true
+        ? await enrollmentService.lockActiveEnrollmentsForStudent(client, id)
+        : [];
       const target = await client.query<User>(`SELECT ${userColumns} FROM users WHERE id = $1 FOR UPDATE`, [id]);
       const old = target.rows[0];
       if (!old) throw new ApiError(404, 'NOT_FOUND', 'Account was not found.');
@@ -79,6 +83,9 @@ export function createB1Router(pool: pg.Pool, config: AuthConfig, loginLimit = 1
         body.isActive ?? old.is_active, id]);
       if (body.isActive === false) {
         await client.query('UPDATE auth_sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL', [id]);
+      }
+      if (body.isActive === true && !old.is_active && old.role === 'STUDENT') {
+        await enrollmentService.backfillPublishedResultsForStudent(client, activeEnrollments);
       }
       return result.rows[0];
     });
@@ -172,41 +179,19 @@ export function createB1Router(pool: pg.Pool, config: AuthConfig, loginLimit = 1
     const rows = await pool.query<EnrollmentRow>(`SELECT * FROM enrollments WHERE class_id = $1
       AND ($2::uuid IS NULL OR id > $2) ORDER BY id LIMIT $3`, [id, cursorId(query.cursor, scope), query.limit + 1]);
     const response=page(rows.rows, query.limit, scope, row=>row);
-    res.json({...response,items:await Promise.all(rows.rows.slice(0,query.limit).map(enrollmentResponse))});
+    res.json({...response,items:await Promise.all(rows.rows.slice(0,query.limit).map(rosterEnrollmentResponse))});
   });
   router.post('/classes/:id/enrollments', requireAdmin, async (req, res) => {
     const id = parse(uuid, req.params.id);
     const body = parse(z.object({ studentId: uuid }).strict(), req.body);
-    await requireClassAccess(pool, getPrincipal(req), id);
-    const result = await transaction(pool, async client => {
-      const student = await client.query<User>(`SELECT ${userColumns} FROM users WHERE id = $1 FOR SHARE`, [body.studentId]);
-      if (!student.rows[0]) throw new ApiError(404, 'NOT_FOUND', 'Student was not found.');
-      if (student.rows[0].role !== 'STUDENT' || !student.rows[0].is_active) {
-        throw new ApiError(400, 'INVALID_MEMBER', 'An active student account is required.');
-      }
-      // Re-enrollment reactivates the same record, preserving all submissions/history.
-      const inserted = await client.query<EnrollmentRow>(`INSERT INTO enrollments(class_id, student_id, enrolled_by) VALUES ($1, $2, $3)
-        ON CONFLICT (class_id, student_id) DO UPDATE SET is_active = true, enrolled_by = EXCLUDED.enrolled_by
-        WHERE NOT enrollments.is_active RETURNING *`, [id, body.studentId, getPrincipal(req).user.id]);
-      if (!inserted.rows[0]) throw new ApiError(409, 'CONFLICT', 'Student is already actively enrolled.');
-      return inserted.rows[0];
-    });
-    res.status(201).json(await enrollmentResponse(result));
+    const result = await enrollmentService.enroll(getPrincipal(req), id, body.studentId);
+    res.status(201).json(await enrollmentService.response(result));
   });
   router.patch('/classes/:id/enrollments/:enrollmentId', requireAdmin, async (req, res) => {
     const id = parse(uuid, req.params.id); const enrollmentId = parse(uuid, req.params.enrollmentId);
     const body = parse(z.object({ isActive: z.boolean() }).strict(), req.body);
-    await requireClassAccess(pool, getPrincipal(req), id);
-    const result = await transaction(pool, async client => {
-      const previous = await client.query<{ student_id: string }>('SELECT student_id FROM enrollments WHERE id = $1 AND class_id = $2', [enrollmentId, id]);
-      if (!previous.rows[0]) throw new ApiError(404, 'NOT_FOUND', 'Enrollment was not found in this class.');
-      const student = await client.query<User>(`SELECT ${userColumns} FROM users WHERE id = $1 FOR SHARE`, [previous.rows[0].student_id]);
-      if (body.isActive && !student.rows[0]?.is_active) throw new ApiError(400, 'INVALID_MEMBER', 'Student account is inactive.');
-      const updated = await client.query<EnrollmentRow>('UPDATE enrollments SET is_active = $1 WHERE id = $2 AND class_id = $3 RETURNING *',
-        [body.isActive, enrollmentId, id]);
-      return updated.rows[0];
-    });
-    res.json(await enrollmentResponse(result!));
+    const result = await enrollmentService.setActive(getPrincipal(req), id, enrollmentId, body.isActive);
+    res.json(await enrollmentService.response(result));
   });
   return router;
 }
