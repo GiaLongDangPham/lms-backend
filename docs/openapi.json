@@ -3780,6 +3780,7 @@
       },
       "PublishedGrade": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "assignmentId",
           "student",
@@ -4439,6 +4440,7 @@
       },
       "GradeHistoryEntry": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "version",
           "score",
@@ -4562,6 +4564,7 @@
                 "type": "array",
                 "items": {
                   "type": "object",
+                    "additionalProperties": false,
                   "required": [
                     "submissionId",
                     "student"
