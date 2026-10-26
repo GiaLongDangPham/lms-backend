@@ -58,6 +58,16 @@ async function gradeCount(assignmentId: string) {
   return (await pool.query('SELECT 1 FROM grades WHERE assignment_id=$1', [assignmentId])).rowCount;
 }
 
+async function gradeRows(assignmentId: string) {
+  return (await pool.query<{ status: string; score: string; source: string }>(
+    'SELECT status,score,source FROM grades WHERE assignment_id=$1 ORDER BY enrollment_id', [assignmentId])).rows;
+}
+
+async function historyCount(assignmentId: string, publishedOnly = false) {
+  return (await pool.query(`SELECT 1 FROM grade_history h JOIN grades g ON g.id=h.grade_id
+    WHERE g.assignment_id=$1 ${publishedOnly ? "AND h.status='PUBLISHED'" : ''}`, [assignmentId])).rowCount;
+}
+
 async function notificationCount(assignmentId: string) {
   return (await pool.query('SELECT 1 FROM notifications WHERE assignment_id=$1', [assignmentId])).rowCount;
 }
@@ -161,5 +171,61 @@ describe.skipIf(!target)('B4 assessment publication', () => {
     expect(blocked.text).not.toContain('B4_PRIVATE_DRAFT_MARKER');
     expect(blocked.body.error).not.toHaveProperty('score');
     expect(await notificationCount(assignmentId)).toBe(0);
+  });
+
+  it('rolls back every publication write when notification creation fails', async () => {
+    const assignmentId = await assignmentFixture();
+    const submission = await submit(assignmentId);
+    expect(submission.status).toBe(201);
+    expect((await saveGrade(submission.body.id, teacher, { gradedVersionNumber: 1, score: 8 })).status).toBe(200);
+    await pool.query(`CREATE FUNCTION b4_fail_notification() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'B4 injected notification failure' USING ERRCODE='P0001'; END $$`);
+    await pool.query(`CREATE TRIGGER b4_notification_failure BEFORE INSERT ON notifications
+      FOR EACH ROW EXECUTE FUNCTION b4_fail_notification()`);
+    try {
+      const response = await publish(assignmentId);
+      expect(response.status).toBe(500);
+      expect(response.text).not.toContain('P0001');
+      expect(await gradeRows(assignmentId)).toEqual([{ status: 'DRAFT', score: '8.00', source: 'MANUAL' }]);
+      expect(await historyCount(assignmentId, true)).toBe(0);
+      expect(await publicationState(assignmentId)).toEqual({ resultsPublishedAt: null, resultsPublishedBy: null });
+      expect(await notificationCount(assignmentId)).toBe(0);
+    } finally {
+      await pool.query('DROP TRIGGER IF EXISTS b4_notification_failure ON notifications');
+      await pool.query('DROP FUNCTION IF EXISTS b4_fail_notification()');
+    }
+  });
+
+  it('serializes simultaneous publication without duplicate results, history, or notifications', async () => {
+    const assignmentId = await assignmentFixture();
+    const submission = await submit(assignmentId);
+    expect(submission.status).toBe(201);
+    expect((await saveGrade(submission.body.id, teacher, { gradedVersionNumber: 1, score: 8 })).status).toBe(200);
+
+    const responses = await Promise.all([publish(assignmentId, teacher), publish(assignmentId, teacher2)]);
+
+    expect(responses.map(response => response.status)).toEqual([200, 200]);
+    expect(responses.map(response => response.body.automaticZeroCount).sort()).toEqual([0, 1]);
+    expect(new Set(responses.map(response => response.body.publishedAt)).size).toBe(1);
+    expect(await gradeCount(assignmentId)).toBe(2);
+    expect(await historyCount(assignmentId)).toBe(3);
+    expect(await notificationCount(assignmentId)).toBe(2);
+    const firstPublisherIndex = responses.findIndex(response => response.body.automaticZeroCount === 1);
+    expect((await publicationState(assignmentId)).resultsPublishedBy)
+      .toBe(firstPublisherIndex === 0 ? id.teacher1 : id.teacher2);
+
+    const before = {
+      grades: await gradeCount(assignmentId),
+      history: await historyCount(assignmentId),
+      notifications: await notificationCount(assignmentId),
+      publication: await publicationState(assignmentId),
+    };
+    expect((await publish(assignmentId, teacher)).status).toBe(200);
+    expect({
+      grades: await gradeCount(assignmentId),
+      history: await historyCount(assignmentId),
+      notifications: await notificationCount(assignmentId),
+      publication: await publicationState(assignmentId),
+    }).toEqual(before);
   });
 });
