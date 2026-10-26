@@ -19,4 +19,15 @@ This document maps the approved B4 behavior to independently reviewable implemen
 
 ## Completion evidence
 
-Final command results, commit SHA, PostgreSQL version, CI result, and any external follow-up will be recorded here in Task 7. Database suites or CI that have not run are not considered passing.
+Local verification completed on 26/10/2026 against implementation commit `96f1bd0084c0c46c9ae4b7298b1147a32ece6fcb`:
+
+- `npm run check`: PASS — ESLint, strict TypeScript, build, and 15 non-database tests passed; 55 database integration tests were intentionally skipped by this command and then run explicitly below.
+- `npm run db:test`: PASS — 20/20 migration, seed, constraint, history, publication-provenance, and deletion checks passed on a disposable PostgreSQL database.
+- `npm run api:test`: PASS — 55/55 tests passed across B1 (21), client rules (13), assignments (7), enrollment publication (6), and focused B4 assessment publication (8); each file used and removed its own disposable database.
+- `npm run api:validate`: PASS — 34 paths, 48 operations, and 6 modules.
+- `node scripts/mock-api.mjs --self-test`: PASS — includes Draft separation, assignment-wide publication, automatic-zero summary, and publication blocker behavior.
+- PostgreSQL server: 17.11 in the repository Docker Compose service.
+- `git diff --check origin/develop...HEAD`: PASS; no production source or applied migration changed. The branch adds verification coverage and closes three OpenAPI `additionalProperties` privacy gaps.
+- GitHub PR CI: **BLOCKED until the branch is pushed and GitHub authentication is restored**. B4 is not merge-complete until required CI is green.
+
+Frontend/staging acceptance remains pending frontend readiness. It is a follow-up dependency and does not block the backend merge once PR CI and review are green.
