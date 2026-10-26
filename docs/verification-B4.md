@@ -28,6 +28,6 @@ Local verification completed on 26/10/2026 against the current `develop` merge c
 - `node scripts/mock-api.mjs --self-test`: PASS — includes Draft separation, assignment-wide publication, automatic-zero summary, and publication blocker behavior.
 - PostgreSQL server: 17.11 in the repository Docker Compose service.
 - `git diff --check origin/develop...HEAD`: PASS after merging PR #10's B2 baseline; the B4 diff changes no production source or applied migration. It adds verification coverage and closes three OpenAPI `additionalProperties` privacy gaps.
-- GitHub PR CI: **BLOCKED until the branch is pushed and GitHub authentication is restored**. B4 is not merge-complete until required CI is green.
+- GitHub PR #11 CI: PASS in Backend CI run `40347692233` for merge-candidate head `336cc69c2fc0bb690440f3ae1aedd999c237b280` (2m01s). The documentation-only evidence commit that records this result must also receive a green rerun before merge.
 
 Frontend/staging acceptance remains pending frontend readiness. It is a follow-up dependency and does not block the backend merge once PR CI and review are green.
