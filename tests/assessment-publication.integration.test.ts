@@ -68,8 +68,20 @@ async function historyCount(assignmentId: string, publishedOnly = false) {
     WHERE g.assignment_id=$1 ${publishedOnly ? "AND h.status='PUBLISHED'" : ''}`, [assignmentId])).rowCount;
 }
 
-async function notificationCount(assignmentId: string) {
-  return (await pool.query('SELECT 1 FROM notifications WHERE assignment_id=$1', [assignmentId])).rowCount;
+async function notificationCount(assignmentId: string, recipientId?: string) {
+  return (await pool.query(`SELECT 1 FROM notifications WHERE assignment_id=$1
+    AND ($2::uuid IS NULL OR recipient_id=$2)`, [assignmentId, recipientId ?? null])).rowCount;
+}
+
+async function gradeSnapshot(assignmentId: string, studentId = id.student1) {
+  return (await pool.query(`SELECT g.* FROM grades g JOIN enrollments e ON e.id=g.enrollment_id
+    WHERE g.assignment_id=$1 AND e.student_id=$2`, [assignmentId, studentId])).rows;
+}
+
+async function historySnapshot(assignmentId: string, studentId = id.student1) {
+  return (await pool.query(`SELECT h.* FROM grade_history h JOIN grades g ON g.id=h.grade_id
+    JOIN enrollments e ON e.id=g.enrollment_id WHERE g.assignment_id=$1 AND e.student_id=$2
+    ORDER BY h.version`, [assignmentId, studentId])).rows;
 }
 
 async function publicationState(assignmentId: string) {
@@ -227,5 +239,92 @@ describe.skipIf(!target)('B4 assessment publication', () => {
       notifications: await notificationCount(assignmentId),
       publication: await publicationState(assignmentId),
     }).toEqual(before);
+  });
+
+  it('rejects invalid grade mutations without changing the grade or history', async () => {
+    const assignmentId = await assignmentFixture();
+    const submission = await submit(assignmentId);
+    expect(submission.status).toBe(201);
+    expect((await saveGrade(submission.body.id, teacher, {
+      gradedVersionNumber: 1, score: 8, feedback: 'keep this feedback',
+    })).status).toBe(200);
+    const gradeBefore = await gradeSnapshot(assignmentId);
+    const historyBefore = await historySnapshot(assignmentId);
+    const invalidDrafts = [
+      { gradedVersionNumber: 1, score: -1 },
+      { gradedVersionNumber: 1, score: 10.001 },
+      { gradedVersionNumber: 1, score: 11 },
+      { gradedVersionNumber: 1, score: 8, feedback: 'x'.repeat(5001) },
+      { gradedVersionNumber: 1, score: 8, unexpected: true },
+    ];
+    for (const body of invalidDrafts) {
+      expect((await saveGrade(submission.body.id, teacher, body)).status).toBe(400);
+      expect(await gradeSnapshot(assignmentId)).toEqual(gradeBefore);
+      expect(await historySnapshot(assignmentId)).toEqual(historyBefore);
+    }
+
+    const automaticAssignmentId = await assignmentFixture();
+    expect((await publish(automaticAssignmentId)).status).toBe(200);
+    const automaticBefore = await gradeSnapshot(automaticAssignmentId);
+    const automaticHistoryBefore = await historySnapshot(automaticAssignmentId);
+    const invalidCorrections = [
+      { score: -1 },
+      { score: 8.001 },
+      { score: 11 },
+      { score: 8, feedback: 'x'.repeat(5001) },
+      { score: 8, unexpected: true },
+    ];
+    for (const body of invalidCorrections) {
+      const response = await api.put(`/api/assignments/${automaticAssignmentId}/grades/${id.student1}`)
+        .auth(teacher, { type: 'bearer' }).send(body);
+      expect(response.status).toBe(400);
+      expect(await gradeSnapshot(automaticAssignmentId)).toEqual(automaticBefore);
+      expect(await historySnapshot(automaticAssignmentId)).toEqual(automaticHistoryBefore);
+    }
+  });
+
+  it('rejects a stale first graded version without writing a grade or history', async () => {
+    const assignmentId = await assignmentFixture();
+    const first = await submit(assignmentId);
+    expect(first.status).toBe(201);
+    expect((await submit(assignmentId)).status).toBe(201);
+
+    const response = await saveGrade(first.body.id, teacher, { gradedVersionNumber: 1, score: 8 });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe('STALE_SUBMISSION_VERSION');
+    expect(await gradeCount(assignmentId)).toBe(0);
+    expect(await historyCount(assignmentId)).toBe(0);
+  });
+
+  it('preserves omitted feedback, clears explicit null, and exposes only Published history to students', async () => {
+    const assignmentId = await assignmentFixture();
+    const submission = await submit(assignmentId);
+    expect(submission.status).toBe(201);
+    const originalFeedback = 'B4 feedback retained until explicitly cleared';
+    expect((await saveGrade(submission.body.id, teacher, {
+      gradedVersionNumber: 1, score: 8, feedback: originalFeedback,
+    })).status).toBe(200);
+    expect((await publish(assignmentId)).status).toBe(200);
+
+    const omitted = await saveGrade(submission.body.id, teacher, { gradedVersionNumber: 1, score: 9 });
+    expect(omitted.body).toMatchObject({ status: 'PUBLISHED', feedback: originalFeedback });
+    const cleared = await saveGrade(submission.body.id, teacher, {
+      gradedVersionNumber: 1, score: 9.5, feedback: null,
+    });
+    expect(cleared.body).toMatchObject({ status: 'PUBLISHED', feedback: null });
+
+    const teacherHistory = await api.get(`/api/assignments/${assignmentId}/grades/${id.student1}/history`)
+      .auth(teacher, { type: 'bearer' });
+    const studentHistory = await api.get(`/api/assignments/${assignmentId}/my-result/history`)
+      .auth(student, { type: 'bearer' });
+    expect(teacherHistory.status).toBe(200);
+    expect(studentHistory.status).toBe(200);
+    expect(teacherHistory.body.items.map((item: { status: string }) => item.status))
+      .toEqual(['DRAFT', 'PUBLISHED', 'PUBLISHED', 'PUBLISHED']);
+    expect(studentHistory.body.items.map((item: { status: string }) => item.status))
+      .toEqual(['PUBLISHED', 'PUBLISHED', 'PUBLISHED']);
+    expect(new Set(teacherHistory.body.items.map((item: { version: number }) => item.version)).size).toBe(4);
+    expect(await notificationCount(assignmentId, id.student1)).toBe(3);
   });
 });
