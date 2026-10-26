@@ -97,6 +97,30 @@ describe.skipIf(!testUrl)('B1 PostgreSQL API and D2 response compatibility', () 
       expect((await api.post('/api/users').auth(token, { type: 'bearer' }).send({})).status).toBe(403);
     }
   });
+  it('preserves Vietnamese UTF-8 through class/user writes, PostgreSQL, reads and search (Bug-01)', async () => {
+    const name = 'Cơ sở dữ liệu'; const description = 'Lớp học tiếng Việt – Nguyễn Ánh, ữ ỡ ệ';
+    const created = await api.post('/api/classes').auth(admin.token, { type: 'bearer' })
+      .set('Content-Type', 'application/json; charset=utf-8')
+      .send(JSON.stringify({ code: 'UTF8', courseCode: 'UTF8', name, term: '2026-HK1', description }));
+    expect(created.status).toBe(201); expect(created.headers['content-type']).toContain('charset=utf-8');
+    expect(created.body.name).toBe(name); expect(created.body.description).toBe(description);
+    const classId = created.body.id;
+    const stored = (await pool.query('SELECT name,description FROM classes WHERE id=$1', [classId])).rows[0];
+    expect(stored).toEqual({ name, description });
+    const read = await api.get(`/api/classes/${classId}`).auth(admin.token, { type: 'bearer' });
+    expect(read.body.name).toBe(name); expect(read.body.description).toBe(description);
+    const updatedName = 'Cơ sở dữ liệu nâng cao';
+    const patched = await api.patch(`/api/classes/${classId}`).auth(admin.token, { type: 'bearer' }).send({ name: updatedName });
+    expect(patched.status).toBe(200); expect(patched.body.name).toBe(updatedName);
+    const found = await api.get('/api/classes').query({ search: 'dữ liệu' }).auth(admin.token, { type: 'bearer' });
+    expect(found.status).toBe(200); expect(found.body.items.find((item: { id: string }) => item.id === classId).name).toBe(updatedName);
+    const fullName = 'Đặng Phạm Gia Long';
+    const account = await api.post('/api/users').auth(admin.token, { type: 'bearer' })
+      .send({ schoolCode: 'UTF8USER', fullName, role: 'STUDENT', initialPassword: fixturePassword });
+    expect(account.status).toBe(201); expect(account.body.fullName).toBe(fullName);
+    expect((await api.get(`/api/users/${account.body.id}`).auth(admin.token, { type: 'bearer' })).body.fullName).toBe(fullName);
+    expect((await pool.query('SELECT full_name FROM users WHERE id=$1', [account.body.id])).rows[0].full_name).toBe(fullName);
+  });
   it('uses stable cursor pages and rejects invalid/cross-list cursors', async () => {
     const first = await api.get('/api/users?limit=2').auth(admin.token, { type: 'bearer' });
     expect(first.status).toBe(200); contract('/users', 'get', 200, first.body);

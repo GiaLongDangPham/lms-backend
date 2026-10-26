@@ -43,7 +43,7 @@ ready and do not block backend completion.
 - Do not rewrite working assessment behavior merely to create a larger B4 diff.
 - Do not weaken authorization, Draft privacy, transactionality, database
   constraints, lint, types, or tests to make verification pass.
-- Do not edit applied migrations `0001` through `0005`; introduce `0006` only
+- Do not edit applied migrations `0001` through `0006`; introduce `0007` only
   when a demonstrated invariant cannot be safely enforced in application code.
 - Do not treat the static OpenAPI mock as proof of authentication, persistence,
   concurrency, or transactional behavior.
@@ -138,7 +138,7 @@ Prioritize gaps by risk:
 
 For each demonstrated gap, add one focused regression test, observe RED, implement
 the smallest owning-layer change, then run the focused test and related integration
-file before continuing. Add migration `0006` only for a database invariant that is
+file before continuing. Add migration `0007` only for a database invariant that is
 both missing and required for correctness under concurrent writers.
 
 ### Contract alignment

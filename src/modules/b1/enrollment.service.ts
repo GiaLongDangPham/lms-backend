@@ -67,6 +67,29 @@ export class EnrollmentService {
     });
   }
 
+  async bulkEnroll(principal: Principal, classId: string, students: { row: number; schoolCode: string }[]) {
+    this.requireAdmin(principal);
+    return transaction(this.repository.db(), async db => {
+      await this.lockClass(db, classId);
+      const items = [];
+      for (const input of students) {
+        const student = (await db.query<UserForBulk>(`SELECT id,role,is_active FROM users
+          WHERE school_code=$1 FOR SHARE`, [input.schoolCode])).rows[0];
+        let status: 'ENROLLED' | 'ALREADY_ENROLLED' | 'NOT_FOUND' | 'INVALID_ROLE';
+        if (!student || !student.is_active) status = 'NOT_FOUND';
+        else if (student.role !== 'STUDENT') status = 'INVALID_ROLE';
+        else {
+          const enrollment = await this.repository.upsertEnrollment(db, classId, student.id, principal.user.id);
+          status = enrollment ? 'ENROLLED' : 'ALREADY_ENROLLED';
+          if (enrollment) await this.backfill.backfillPublishedResultsForEnrollment(db, classId, enrollment.id);
+        }
+        items.push({ ...input, status, message: null });
+      }
+      const successCount = items.filter(item => item.status === 'ENROLLED').length;
+      return { items, successCount, failureCount: items.length - successCount };
+    });
+  }
+
   async response(row: EnrollmentRow) {
     const student = await this.repository.findEnrollmentStudentSummary(this.repository.db(), row.student_id);
     if (!student) throw new ApiError(404, 'NOT_FOUND', 'Student was not found.');
@@ -74,3 +97,5 @@ export class EnrollmentService {
       fullName: student.full_name, role: student.role } };
   }
 }
+
+interface UserForBulk { id: string; role: string; is_active: boolean }

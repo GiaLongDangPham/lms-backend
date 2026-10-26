@@ -17,7 +17,7 @@
 - Draft score and feedback must never reach a student-facing response, error, history entry, or notification.
 - Publication covers the active enrollment/account cohort atomically and is idempotent under repeat or concurrent calls.
 - Published corrections stay Published and append immutable history; automatic zeroes never create fake submissions.
-- Do not edit migrations `0001` through `0005`. If a test proves a new database invariant is necessary, stop and obtain approval for a revised plan containing migration `0006`.
+- Do not edit migrations `0001` through `0006`. If a test proves a new database invariant is necessary, stop and obtain approval for a revised plan containing migration `0007`.
 - Do not add dependencies, endpoints, unpublish behavior, frontend work, object storage, comments, or notification-listing behavior.
 - Write and observe a failing regression test before every production-code change. A new test that passes against the baseline is coverage, not permission to manufacture a code diff.
 - Use deterministic PostgreSQL locks/`pg_stat_activity` observation for concurrency tests; do not coordinate correctness with timing sleeps.
@@ -403,7 +403,7 @@ Run: `git diff --stat origin/develop...HEAD`
 
 Run: `git diff origin/develop...HEAD -- src/modules database/migrations docs/openapi.json tests scripts`
 
-Expected: no whitespace errors, unrelated cleanup, secret/config additions, edits to migrations `0001`–`0005`, or behavior beyond B4.
+Expected: no whitespace errors, unrelated cleanup, secret/config additions, edits to migrations `0001`–`0006`, or behavior beyond B4.
 
 - [ ] **Step 2: Run static/unit/build verification**
 

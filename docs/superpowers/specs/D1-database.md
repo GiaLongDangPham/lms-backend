@@ -1,20 +1,23 @@
 # D1 · Thiết kế database
 
+[Kế hoạch/checklist](../plans/D1-database.md) · [Quyết định](D1-quyet-dinh.md) ·
+[ERD](D1-erd.md) · [Kiểm tra local](../plans/D1-kiem-tra.md).
+
 Ngày chuẩn bị: 11/10/2026 · Cập nhật: 17/10/2026 · Long phụ trách.
 
 Đã đối chiếu D2 commit 532f983 và Client Log 18–20/L04/L05/L14/L20. Migration `0003`
 cập nhật dữ liệu cũ từ 0001/0002; không sửa migration đã áp dụng. Các phần chưa chốt
-được ghi riêng trong [D1-decisions.md](D1-decisions.md), không coi toàn bộ schema là
+được ghi riêng trong [D1-quyet-dinh.md](D1-quyet-dinh.md), không coi toàn bộ schema là
 đã nghiệm thu chỉ vì các thay đổi này đã được triển khai.
 
 ## Căn cứ và mức độ chắc chắn
 
 | Nguồn | Nội dung dùng trong thiết kế |
 | --- | --- |
-| [LMS Project.pdf](../../LMS%20Project.pdf), trang 2–3 | Client Log #1–12: tài khoản cấp sẵn, nhiều GV/lớp, lịch sử nộp, nhiều file, điểm công bố, thông báo và comment |
-| [LMS Project.pdf](../../LMS%20Project.pdf), trang 9–10, 16 | Phạm vi Task 1.4 và DB Schema: chín thực thể chính, ERD + migration, 3NF và khóa ngoại |
-| [Full task từng người.pdf](../../Full%20task%20t%E1%BB%ABng%20ng%C6%B0%E1%BB%9Di.pdf), trang 7, 10–11 | Long làm D1 ngày 14–15/10; Nam làm D2, thống nhất tên thực thể; B3 dùng dữ liệu mẫu |
-| [Kế hoạch tuần 01](../../K%E1%BA%BF%20ho%E1%BA%A1ch%20tu%E1%BA%A7n%2001%20%C2%B7%2012-18%2010%20%C2%B7%20LMS%20Nh%C3%B3m%202.pdf), trang 4–5 | Bàn giao DB cho Nam/Khang; DB, API và UI hội tụ tại CP1 ngày 15/10 |
+| [LMS Project.pdf](../../../../LMS%20Project.pdf), trang 2–3 | Client Log #1–12: tài khoản cấp sẵn, nhiều GV/lớp, lịch sử nộp, nhiều file, điểm công bố, thông báo và comment |
+| [LMS Project.pdf](../../../../LMS%20Project.pdf), trang 9–10, 16 | Phạm vi Task 1.4 và DB Schema: chín thực thể chính, ERD + migration, 3NF và khóa ngoại |
+| [Full task từng người.pdf](../../../../Full%20task%20t%E1%BB%ABng%20ng%C6%B0%E1%BB%9Di.pdf), trang 7, 10–11 | Long làm D1 ngày 14–15/10; Nam làm D2, thống nhất tên thực thể; B3 dùng dữ liệu mẫu |
+| [Kế hoạch tuần 01](../../../../K%E1%BA%BF%20ho%E1%BA%A1ch%20tu%E1%BA%A7n%2001%20%C2%B7%2012-18%2010%20%C2%B7%20LMS%20Nh%C3%B3m%202.pdf), trang 4–5 | Bàn giao DB cho Nam/Khang; DB, API và UI hội tụ tại CP1 ngày 15/10 |
 
 - **Đã xác nhận:** PostgreSQL; Long chọn UUID, migration SQL dùng pg và mã trường
   đăng nhập (email liên hệ); ba role Admin/GV/SV; Admin cấp tài khoản, tạo lớp,
@@ -24,7 +27,7 @@ cập nhật dữ liệu cũ từ 0001/0002; không sửa migration đã áp d�
   bên dưới. Có thể sửa khi đối chiếu D2.
 - **Đã chốt 17/10:** khóa nộp sau chấm; sửa Published giữ Published và lưu lịch sử;
   công bố cả bài atomic, tự gán 0 không có submission; note từng version; mã học phần.
-- **Chưa chốt:** các phần còn mở trong [D1-decisions.md](D1-decisions.md).
+- **Chưa chốt:** các phần còn mở trong [D1-quyet-dinh.md](D1-quyet-dinh.md).
   Bản nháp không tự bổ sung quy tắc nghiệp vụ đã được khách hàng duyệt.
 
 ## 1. Bảng thực thể — dữ liệu — quan hệ — câu hỏi
@@ -319,5 +322,5 @@ Khi đã chọn công cụ và viết migration, cần kiểm tra trên **databa
 7. Đối chiếu trường/API với Nam; Khang dùng đúng ID, trạng thái và ví dụ response.
 
 Migration/seed và ràng buộc đã được kiểm tra qua `npm run db:test`; quy tắc còn mở
-và API phân quyền chưa được nghiệm thu. Xem [verification-D1.md](verification-D1.md)
-và [hướng dẫn migration](../database/migrations/README.md).
+và API phân quyền chưa được nghiệm thu. Xem [D1-kiem-tra.md](../plans/D1-kiem-tra.md)
+và [hướng dẫn migration](../../../database/migrations/README.md).

@@ -1,5 +1,8 @@
 # Checklist Long · chuẩn bị 11/10 và S1 ngày 12–13/10/2026
 
+[Thiết kế môi trường](../specs/S1-moi-truong.md) ·
+[Kết quả kiểm tra](S1-kiem-tra.md) · [Câu hỏi kickoff/checkpoint](S1-cau-hoi.md).
+
 ## Chuẩn bị hôm nay
 
 - [x] Long chọn React + Express/TypeScript + PostgreSQL.
@@ -8,7 +11,7 @@
 - [x] Tạo Compose PostgreSQL local và health/readiness API.
 - [x] Chuẩn bị workflow CI cho cả hai repo và PR template.
 - [x] Soạn quyết định kỹ thuật và câu hỏi kickoff.
-- [x] Ghi kết quả xác minh local vào `verification-11-10.md`.
+- [x] Ghi kết quả xác minh local vào `docs/superpowers/plans/S1-kiem-tra.md`.
 
 ## S1 · DoD phải đủ trước khi đóng issue
 

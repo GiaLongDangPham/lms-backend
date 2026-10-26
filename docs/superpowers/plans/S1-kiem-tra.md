@@ -1,5 +1,8 @@
 # Kết quả xác minh khung local · 11/10/2026
 
+Task: **S1** · Bằng chứng lịch sử ngày 11/10, giữ nguyên kết quả đã ghi nhận.
+[Spec](../specs/S1-moi-truong.md) · [Plan](S1-moi-truong.md).
+
 ## Đã kiểm tra
 
 | Kiểm tra | Kết quả |
@@ -45,6 +48,6 @@ Chưa chứng nhận screen reader, kiểm thử toàn bộ accessibility hay mo
 - DB schema/migration/seed nghiệp vụ thuộc D1; API spec/mock thuộc D2; FE app shell
   theo role thuộc F0. Các phần này chưa được coi hoàn thành bởi khung S1.
 
-Ảnh kiểm tra local: [FE–BE–DB đã kết nối](../../tmp/verification/s1-local.jpg).
+Ảnh kiểm tra local: [FE–BE–DB đã kết nối](../../../../tmp/verification/s1-local.jpg).
 
 Giờ thực tế/standup do Long ghi; chưa cập nhật Tracker hay đóng issue.

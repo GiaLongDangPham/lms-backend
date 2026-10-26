@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { uploadLimitsFromEnv } from '../modules/materials/upload-limits.js';
 
 const port = Number(process.env.PORT ?? 3000);
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -38,6 +39,7 @@ export const env = {
   authOrigins,
   databaseUrl,
   databaseSsl: process.env.DATABASE_SSL === 'true',
+  uploadLimits: uploadLimitsFromEnv(),
   auth: {
     secret: process.env.JWT_SECRET ?? '',
     issuer: process.env.JWT_ISSUER ?? 'lms-backend',

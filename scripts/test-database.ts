@@ -49,14 +49,14 @@ try {
   await check('first migration creates all 15 domain tables on an empty database', async () => {
     assert.deepEqual(await migrate(pool), ['0001_initial_schema.sql', '0002_b1_auth.sql',
       '0003_client_rules.sql', '0004_b3_assignments_submissions.sql',
-      '0005_assignment_publication_actor.sql']);
+      '0005_assignment_publication_actor.sql', '0006_b2_material_file_limit.sql']);
     const tables = await pool.query<{ tablename: string }>(
       "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'schema_migrations'");
     assert.deepEqual(tables.rows.map((row) => row.tablename).sort(), [...domainTables, 'grade_history', 'auth_sessions', 'auth_refresh_tokens'].sort());
   });
   await check('running migrations again is a no-op', async () => {
     assert.deepEqual(await migrate(pool), []);
-    assert.equal((await pool.query('SELECT * FROM schema_migrations')).rowCount, 5);
+    assert.equal((await pool.query('SELECT * FROM schema_migrations')).rowCount, 6);
   });
   await check('a competing migration/seed process cannot acquire the migration lock', async () => {
     const holder = await pool.connect();
@@ -83,13 +83,15 @@ try {
       await readFile(path.join(migrationDirectory, '0004_b3_assignments_submissions.sql'), 'utf8'));
     await writeFile(path.join(temporaryDirectory, '0005_assignment_publication_actor.sql'),
       await readFile(path.join(migrationDirectory, '0005_assignment_publication_actor.sql'), 'utf8'));
-    await writeFile(path.join(temporaryDirectory, '0006_rollback_probe.sql'),
+    await writeFile(path.join(temporaryDirectory, '0006_b2_material_file_limit.sql'),
+      await readFile(path.join(migrationDirectory, '0006_b2_material_file_limit.sql'), 'utf8'));
+    await writeFile(path.join(temporaryDirectory, '0007_rollback_probe.sql'),
       'CREATE TABLE rollback_probe(id integer); SELECT 1 / 0;');
     await assert.rejects(migrate(pool, temporaryDirectory), { code: '22012' });
     const probe = await pool.query<{ table_name: string | null }>(
       "SELECT to_regclass('public.rollback_probe')::text AS table_name");
     assert.equal(probe.rows[0]?.table_name, null);
-    assert.equal((await pool.query('SELECT * FROM schema_migrations')).rowCount, 5);
+    assert.equal((await pool.query('SELECT * FROM schema_migrations')).rowCount, 6);
     assert.deepEqual(await migrate(pool), []);
   });
   await check('local-only seed guard rejects remote hosts and production', async () => {

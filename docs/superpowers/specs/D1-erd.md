@@ -2,7 +2,7 @@
 
 Đối chiếu migration 0001–0005, D2 commit 532f983 và Client Log 18–20/L04/L05/L14/L20.
 Có 16 bảng nghiệp vụ và 2 bảng auth; không vẽ bảng quản lý migration.
-Xem [từ điển dữ liệu](database-design.md) và [quyết định](D1-decisions.md).
+Xem [từ điển dữ liệu](D1-database.md) và [quyết định](D1-quyet-dinh.md).
 
 PK = khóa chính; FK = khóa ngoại; UK = khóa duy nhất. UUID đã được Long chốt Q02.
 Migration `0003` bổ sung nghiệp vụ mới; `0004` áp dụng precision điểm, lifecycle
@@ -15,9 +15,9 @@ và bất biến. Đây là provenance nội bộ, không phải trường API.
 Đường liền biểu thị quan hệ định danh, nét đứt biểu thị quan hệ không định danh;
 cú pháp theo [tài liệu Mermaid ERD](https://mermaid.js.org/syntax/entityRelationshipDiagram.html).
 
-Nguồn PlantUML để paste vào editor: [lms-erd.puml](../database/diagrams/lms-erd.puml).
-Nguồn Mermaid: [lms-erd.mmd](../database/diagrams/lms-erd.mmd).
-Bản xem/phóng to: [lms-erd.svg](../database/diagrams/lms-erd.svg).
+Nguồn PlantUML để paste vào editor: [lms-erd.puml](../../../database/diagrams/lms-erd.puml).
+Nguồn Mermaid: [lms-erd.mmd](../../../database/diagrams/lms-erd.mmd).
+Bản xem/phóng to: [lms-erd.svg](../../../database/diagrams/lms-erd.svg).
 
 Paste `.mmd` vào https://mermaid.live hoặc `.puml` vào editor PlantUML/draw.io có
 hỗ trợ PlantUML. SVG được render local từ `.puml`; khi đổi schema cập nhật cả hai
