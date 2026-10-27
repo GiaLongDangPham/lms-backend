@@ -90,14 +90,14 @@ async function publicationState(assignmentId: string) {
   return { resultsPublishedAt: row.results_published_at, resultsPublishedBy: row.results_published_by };
 }
 
-async function waitForBlockedQuery(queryFragment: string): Promise<void> {
+async function waitForBlockedQueries(queryFragment: string, expectedCount = 1): Promise<void> {
   for (let attempt = 0; attempt < 500; attempt++) {
-    const blocked = await pool.query(`SELECT 1 FROM pg_stat_activity WHERE datname=current_database()
+    const blocked = await pool.query(`SELECT pid FROM pg_stat_activity WHERE datname=current_database()
       AND pid <> pg_backend_pid() AND wait_event_type='Lock' AND query LIKE $1`, [`%${queryFragment}%`]);
-    if (blocked.rowCount) return;
+    if ((blocked.rowCount ?? 0) >= expectedCount) return;
     await new Promise<void>(resolve => setImmediate(resolve));
   }
-  throw new Error(`Timed out waiting for blocked query containing: ${queryFragment}`);
+  throw new Error(`Timed out waiting for ${expectedCount} blocked queries containing: ${queryFragment}`);
 }
 
 async function revokeTeacherWhileRequestWaits(run: () => Promise<request.Response>) {
@@ -108,7 +108,7 @@ async function revokeTeacherWhileRequestWaits(run: () => Promise<request.Respons
     await guard.query(`SELECT 1 FROM class_teachers WHERE class_id=$1 AND teacher_id=$2 FOR UPDATE`,
       [id.classA, id.teacher1]);
     const pending = run();
-    await waitForBlockedQuery('JOIN class_teachers ct');
+    await waitForBlockedQueries('JOIN class_teachers ct');
     await guard.query('DELETE FROM class_teachers WHERE class_id=$1 AND teacher_id=$2', [id.classA, id.teacher1]);
     await guard.query('COMMIT');
     committed = true;
@@ -185,26 +185,48 @@ describe.skipIf(!target)('B4 assessment publication', () => {
     expect(await notificationCount(assignmentId)).toBe(0);
   });
 
-  it('rolls back every publication write when notification creation fails', async () => {
+  it('rolls back notifications and metadata after a late publication failure', async () => {
     const assignmentId = await assignmentFixture();
     const submission = await submit(assignmentId);
     expect(submission.status).toBe(201);
     expect((await saveGrade(submission.body.id, teacher, { gradedVersionNumber: 1, score: 8 })).status).toBe(200);
-    await pool.query(`CREATE FUNCTION b4_fail_notification() RETURNS trigger LANGUAGE plpgsql AS $$
-      BEGIN RAISE EXCEPTION 'B4 injected notification failure' USING ERRCODE='P0001'; END $$`);
-    await pool.query(`CREATE TRIGGER b4_notification_failure BEFORE INSERT ON notifications
-      FOR EACH ROW EXECUTE FUNCTION b4_fail_notification()`);
+    await pool.query('CREATE SEQUENCE b4_notification_probe_seq');
+    await pool.query('CREATE SEQUENCE b4_metadata_probe_seq');
+    await pool.query(`CREATE FUNCTION b4_probe_notification() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN PERFORM nextval('b4_notification_probe_seq'); RETURN NEW; END $$`);
+    await pool.query(`CREATE TRIGGER b4_notification_probe AFTER INSERT ON notifications
+      FOR EACH ROW EXECUTE FUNCTION b4_probe_notification()`);
+    await pool.query(`CREATE FUNCTION b4_fail_after_publication_metadata() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF OLD.results_published_at IS NULL AND NEW.results_published_at IS NOT NULL THEN
+          PERFORM nextval('b4_metadata_probe_seq');
+          RAISE EXCEPTION 'B4 injected late publication failure' USING ERRCODE='P0001';
+        END IF;
+        RETURN NEW;
+      END $$`);
+    await pool.query(`CREATE TRIGGER b4_publication_metadata_failure AFTER UPDATE ON assignments
+      FOR EACH ROW EXECUTE FUNCTION b4_fail_after_publication_metadata()`);
     try {
       const response = await publish(assignmentId);
       expect(response.status).toBe(500);
       expect(response.text).not.toContain('P0001');
+      expect((await pool.query<{ last_value: string; is_called: boolean }>(
+        'SELECT last_value,is_called FROM b4_notification_probe_seq')).rows[0])
+        .toEqual({ last_value: '2', is_called: true });
+      expect((await pool.query<{ last_value: string; is_called: boolean }>(
+        'SELECT last_value,is_called FROM b4_metadata_probe_seq')).rows[0])
+        .toEqual({ last_value: '1', is_called: true });
       expect(await gradeRows(assignmentId)).toEqual([{ status: 'DRAFT', score: '8.00', source: 'MANUAL' }]);
       expect(await historyCount(assignmentId, true)).toBe(0);
       expect(await publicationState(assignmentId)).toEqual({ resultsPublishedAt: null, resultsPublishedBy: null });
       expect(await notificationCount(assignmentId)).toBe(0);
     } finally {
-      await pool.query('DROP TRIGGER IF EXISTS b4_notification_failure ON notifications');
-      await pool.query('DROP FUNCTION IF EXISTS b4_fail_notification()');
+      await pool.query('DROP TRIGGER IF EXISTS b4_publication_metadata_failure ON assignments');
+      await pool.query('DROP FUNCTION IF EXISTS b4_fail_after_publication_metadata()');
+      await pool.query('DROP TRIGGER IF EXISTS b4_notification_probe ON notifications');
+      await pool.query('DROP FUNCTION IF EXISTS b4_probe_notification()');
+      await pool.query('DROP SEQUENCE IF EXISTS b4_metadata_probe_seq');
+      await pool.query('DROP SEQUENCE IF EXISTS b4_notification_probe_seq');
     }
   });
 
@@ -214,7 +236,21 @@ describe.skipIf(!target)('B4 assessment publication', () => {
     expect(submission.status).toBe(201);
     expect((await saveGrade(submission.body.id, teacher, { gradedVersionNumber: 1, score: 8 })).status).toBe(200);
 
-    const responses = await Promise.all([publish(assignmentId, teacher), publish(assignmentId, teacher2)]);
+    const guard = await pool.connect();
+    await guard.query('BEGIN');
+    await guard.query('SELECT id FROM classes WHERE id=$1 FOR UPDATE', [id.classA]);
+    const firstPublication = publish(assignmentId, teacher);
+    const secondPublication = publish(assignmentId, teacher2);
+    let released = false;
+    try {
+      await waitForBlockedQueries('SELECT id FROM classes WHERE id=$1 FOR UPDATE', 2);
+      await guard.query('COMMIT');
+      released = true;
+    } finally {
+      if (!released) await guard.query('ROLLBACK');
+      guard.release();
+    }
+    const responses = await Promise.all([firstPublication, secondPublication]);
 
     expect(responses.map(response => response.status)).toEqual([200, 200]);
     expect(responses.map(response => response.body.automaticZeroCount).sort()).toEqual([0, 1]);
