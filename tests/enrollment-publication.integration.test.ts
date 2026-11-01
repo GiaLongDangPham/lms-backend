@@ -80,6 +80,20 @@ async function publicationNotificationCount(assignmentId: string, studentId: str
     AND kind='GRADE_PUBLISHED'`, [assignmentId, studentId])).rowCount;
 }
 
+async function publicationFor(assignmentId: string) {
+  return (await pool.query<{ results_published_at: Date; results_published_by: string }>(
+    'SELECT results_published_at,results_published_by FROM assignments WHERE id=$1', [assignmentId])).rows[0]!;
+}
+
+async function expectPublishedAutomaticZero(assignmentId: string, enrollmentId: string) {
+  const publication = await publicationFor(assignmentId);
+  expect(await gradeFor(assignmentId, enrollmentId)).toMatchObject({
+    score: '0.00', status: 'PUBLISHED', source: 'AUTO_ZERO_NO_SUBMISSION',
+    submission_id: null, graded_version_number: null, graded_by: publication.results_published_by,
+    published_by: publication.results_published_by, published_at: publication.results_published_at,
+  });
+}
+
 async function pendingFile(studentId: string) {
   const fileId = randomUUID();
   await pool.query(`INSERT INTO files(id,storage_provider,storage_container,object_key,original_name,mime_type,size_bytes,uploaded_by)
@@ -204,6 +218,12 @@ describe.skipIf(!target)('published results during enrollment and reactivation',
     expect(await gradeCount(assignmentId, enrollmentId)).toBe(1);
     expect(await historyCount(assignmentId, enrollmentId)).toBe(1);
     expect(await publicationNotificationCount(assignmentId, seedIds.student2)).toBe(1);
+    await expectPublishedAutomaticZero(assignmentId, enrollmentId);
+    const studentToken = await login('SV002');
+    const attempt = await api.post(`/api/assignments/${assignmentId}/submissions`)
+      .auth(studentToken, { type: 'bearer' }).send({ fileIds: [await pendingFile(seedIds.student2)] });
+    expect(attempt.status).toBe(409);
+    expect(attempt.body.error.code).toBe('GRADE_LOCKS_SUBMISSION');
   });
 
   it('serializes concurrent publication and enrollment into one grade and one history revision', async () => {
@@ -218,5 +238,11 @@ describe.skipIf(!target)('published results during enrollment and reactivation',
     expect(await gradeCount(assignmentId, enrollmentId)).toBe(1);
     expect(await historyCount(assignmentId, enrollmentId)).toBe(1);
     expect(await publicationNotificationCount(assignmentId, seedIds.student2)).toBe(1);
+    await expectPublishedAutomaticZero(assignmentId, enrollmentId);
+    const studentToken = await login('SV002');
+    const attempt = await api.post(`/api/assignments/${assignmentId}/submissions`)
+      .auth(studentToken, { type: 'bearer' }).send({ fileIds: [await pendingFile(seedIds.student2)] });
+    expect(attempt.status).toBe(409);
+    expect(attempt.body.error.code).toBe('GRADE_LOCKS_SUBMISSION');
   });
 });

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import SwaggerParser from '@apidevtools/swagger-parser';
 import { Ajv2020 } from 'ajv/dist/2020.js';
+import { fullFormats } from 'ajv-formats/dist/formats.js';
 import { describe, expect, it } from 'vitest';
 
 describe('D2 OpenAPI contract', () => {
@@ -53,7 +54,45 @@ describe('D2 OpenAPI contract', () => {
     expect(saveGrade({ gradedVersionNumber: 1, score: 8.25, feedback: 'x'.repeat(5000) })).toBe(true);
     expect(saveGrade({ gradedVersionNumber: 1, score: 8, feedback: 'x'.repeat(5001) })).toBe(false);
     expect(saveGrade({ gradedVersionNumber: 1, score: 8, unexpected: true })).toBe(false);
+    expect(saveGrade({ gradedVersionNumber: 1, score: -1 })).toBe(false);
+    expect(saveGrade({ gradedVersionNumber: 1, score: 8.001 })).toBe(false);
+    expect(saveGrade({ gradedVersionNumber: 0, score: 8 })).toBe(false);
+    expect(saveGrade({ gradedVersionNumber: 1.5, score: 8 })).toBe(false);
+    expect(saveGrade({ score: 8 })).toBe(false);
     expect(correctUnsubmitted({ score: 8.25, feedback: null })).toBe(true);
     expect(correctUnsubmitted({ score: 8.001 })).toBe(false);
+    expect(correctUnsubmitted({ score: -1 })).toBe(false);
+    expect(correctUnsubmitted({ score: 8, feedback: 'x'.repeat(5001) })).toBe(false);
+    expect(correctUnsubmitted({ score: 8, unexpected: true })).toBe(false);
+  });
+  it('keeps Draft-only fields out of student grade/history and publication blockers', () => {
+    const spec = JSON.parse(readFileSync('docs/openapi.json', 'utf8'));
+    const ajv = new Ajv2020({ strict: false, allErrors: true });
+    for (const [name, format] of Object.entries(fullFormats)) ajv.addFormat(name, format);
+    ajv.addSchema({ ...spec, $id: 'contract' });
+    const publishedGrade = ajv.compile({ $ref: 'contract#/components/schemas/PublishedGrade' });
+    const gradeHistory = ajv.compile({ $ref: 'contract#/components/schemas/GradeHistory' });
+    const publicationBlocked = ajv.compile({ $ref: 'contract#/components/schemas/AssignmentPublicationError' });
+    const student = { id: '10000000-0000-4000-8000-000000000004', schoolCode: 'SV001',
+      fullName: 'Student', role: 'STUDENT' };
+    const published = { assignmentId: '50000000-0000-4000-8000-000000000001', student,
+      submissionId: null, gradedVersionNumber: null, score: 0, feedback: null, status: 'PUBLISHED',
+      source: 'AUTO_ZERO_NO_SUBMISSION', publishedBy: student, publishedAt: '2026-10-26T00:00:00Z' };
+    expect(publishedGrade(published)).toBe(true);
+    expect(publishedGrade({ ...published, gradedBy: student, gradedAt: '2026-10-26T00:00:00Z' })).toBe(false);
+    const history = { assignmentId: published.assignmentId, student, items: [{ version: 1, score: 0,
+      feedback: null, status: 'PUBLISHED', source: 'AUTO_ZERO_NO_SUBMISSION', changedBy: student,
+      changedAt: '2026-10-26T00:00:00Z' }] };
+    expect(gradeHistory(history)).toBe(true);
+    expect(gradeHistory({ ...history, items: [{ ...history.items[0], gradedAt: '2026-10-26T00:00:00Z' }] }))
+      .toBe(false);
+    const blocker = { error: { code: 'UNGRADED_SUBMISSIONS',
+      message: 'All submitted work must be graded before publication.', ungradedSubmissions: [{
+        submissionId: '60000000-0000-4000-8000-000000000001', student,
+      }] } };
+    expect(publicationBlocked(blocker)).toBe(true);
+    expect(publicationBlocked({ error: { ...blocker.error, ungradedSubmissions: [{
+      ...blocker.error.ungradedSubmissions[0], score: 8, feedback: 'private',
+    }] } })).toBe(false);
   });
 });
