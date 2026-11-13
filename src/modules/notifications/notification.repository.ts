@@ -40,4 +40,27 @@ export class NotificationRepository {
       ON CONFLICT(recipient_id,deduplication_key) DO NOTHING`,
     [studentId,grade.assignmentId,`grade:${grade.id}:${grade.revision}`]);
   }
+
+  async dispatchDeadlineReminders(): Promise<number> {
+    const result = await this.pool.query(`WITH dispatch_time AS (
+        SELECT clock_timestamp() AS captured_at
+      )
+      INSERT INTO notifications(recipient_id,assignment_id,kind,title,body,deduplication_key)
+      SELECT e.student_id,a.id,'DEADLINE_REMINDER','Sắp đến hạn nộp bài',
+        'Bài tập "' || a.title || '" sẽ hết hạn trong vòng 24 giờ.',
+        'deadline-reminder:' || a.id || ':' ||
+          to_char(a.deadline_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
+      FROM dispatch_time dt
+      JOIN assignments a ON a.deadline_at>dt.captured_at
+        AND a.deadline_at<=dt.captured_at+interval '24 hours'
+        AND a.results_published_at IS NULL
+      JOIN enrollments e ON e.class_id=a.class_id AND e.is_active
+      JOIN users u ON u.id=e.student_id AND u.is_active
+      WHERE NOT EXISTS(SELECT 1 FROM submissions s
+        WHERE s.assignment_id=a.id AND s.enrollment_id=e.id)
+      AND NOT EXISTS(SELECT 1 FROM grades g
+        WHERE g.assignment_id=a.id AND g.enrollment_id=e.id)
+      ON CONFLICT(recipient_id,deduplication_key) DO NOTHING`);
+    return result.rowCount ?? 0;
+  }
 }

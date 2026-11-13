@@ -54,4 +54,8 @@ export class NotificationService implements NotificationPublisher {
   async resultPublished(db: NotificationDb, grade: GradePublishedEvent, studentId: string): Promise<void> {
     await this.repository.insertGradePublished(db, grade, studentId);
   }
+
+  async dispatchDeadlineReminders(): Promise<number> {
+    return this.repository.dispatchDeadlineReminders();
+  }
 }

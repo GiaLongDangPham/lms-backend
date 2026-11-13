@@ -30,6 +30,19 @@ async function login(schoolCode: string) {
   return response.body.accessToken as string;
 }
 
+async function createReminderAssignment(offset: string, title = 'Deadline reminder fixture') {
+  return (await pool.query<{id:string;deadline_at:Date}>(`INSERT INTO assignments
+    (class_id,title,deadline_at,max_score,created_by)
+    VALUES($1,$2,clock_timestamp()+$3::interval,10,$4)
+    RETURNING id,deadline_at`,[id.classA,`${title} ${randomUUID()}`,offset,id.teacher1])).rows[0]!;
+}
+
+async function reminderRecipients(assignmentId: string) {
+  return (await pool.query<{recipient_id:string;deduplication_key:string}>(`SELECT recipient_id,deduplication_key
+    FROM notifications WHERE assignment_id=$1 AND kind='DEADLINE_REMINDER' ORDER BY recipient_id`,
+  [assignmentId])).rows;
+}
+
 describe.skipIf(!target)('B5 student notifications', () => {
   beforeAll(async () => {
     [student1,student2,teacher,admin] = await Promise.all([
@@ -180,5 +193,89 @@ describe.skipIf(!target)('B5 student notifications', () => {
       await pool.query('DROP TRIGGER IF EXISTS b5_reject_assignment_notification ON notifications');
       await pool.query('DROP FUNCTION IF EXISTS b5_reject_assignment_notification()');
     }
+  });
+
+  it('dispatches only deadlines in (now, now + 24 hours], using database-owned boundaries', async () => {
+    const inside = await createReminderAssignment('23 hours 59 minutes');
+    const boundary = await createReminderAssignment('24 hours');
+    const outside = await createReminderAssignment('24 hours 1 minute');
+    const due = await createReminderAssignment('0 seconds');
+    const past = await createReminderAssignment('-1 minute');
+    const published = await createReminderAssignment('1 hour');
+    await pool.query('UPDATE assignments SET results_published_at=clock_timestamp(),results_published_by=$2 WHERE id=$1',
+      [published.id,id.teacher1]);
+
+    const service = new NotificationService(new NotificationRepository(pool));
+    await service.dispatchDeadlineReminders();
+
+    expect((await reminderRecipients(inside.id)).map(row=>row.recipient_id)).toEqual([id.student1,id.student2]);
+    expect((await reminderRecipients(boundary.id)).map(row=>row.recipient_id)).toEqual([id.student1,id.student2]);
+    for (const assignment of [outside,due,past,published]) {
+      expect(await reminderRecipients(assignment.id)).toEqual([]);
+    }
+  });
+
+  it('suppresses ineligible students and remains idempotent across deadline changes and concurrent sweeps', async () => {
+    const submitted = await createReminderAssignment('2 hours','Submitted');
+    await pool.query('INSERT INTO submissions(assignment_id,enrollment_id) VALUES($1,$2)',
+      [submitted.id,id.enrollment1]);
+    const graded = await createReminderAssignment('3 hours','Graded');
+    await pool.query(`INSERT INTO grades(assignment_id,enrollment_id,score,status,source,graded_by,published_by,published_at)
+      VALUES($1,$2,0,'PUBLISHED','AUTO_ZERO_NO_SUBMISSION',$3,$3,clock_timestamp())`,
+    [graded.id,id.enrollment1,id.teacher1]);
+    const inactiveEnrollment = await createReminderAssignment('4 hours','Inactive enrollment');
+    const inactiveUser = await createReminderAssignment('5 hours','Inactive user');
+    await pool.query('UPDATE enrollments SET is_active=false WHERE id=$1',[id.enrollment1]);
+    await pool.query('UPDATE users SET is_active=false WHERE id=$1',[id.student2]);
+
+    const service = new NotificationService(new NotificationRepository(pool));
+    try {
+      await service.dispatchDeadlineReminders();
+    } finally {
+      await pool.query('UPDATE enrollments SET is_active=true WHERE id=$1',[id.enrollment1]);
+      await pool.query('UPDATE users SET is_active=true WHERE id=$1',[id.student2]);
+    }
+    expect((await reminderRecipients(submitted.id)).map(row=>row.recipient_id)).toEqual([]);
+    expect((await reminderRecipients(graded.id)).map(row=>row.recipient_id)).toEqual([]);
+    expect(await reminderRecipients(inactiveEnrollment.id)).toEqual([]);
+    expect(await reminderRecipients(inactiveUser.id)).toEqual([]);
+
+    const changing = await createReminderAssignment('6 hours','Changing deadline');
+    await Promise.all([service.dispatchDeadlineReminders(),service.dispatchDeadlineReminders()]);
+    const first = await reminderRecipients(changing.id);
+    expect(first).toHaveLength(2);
+    await pool.query("UPDATE assignments SET deadline_at=deadline_at+interval '1 hour' WHERE id=$1",[changing.id]);
+    await Promise.all([service.dispatchDeadlineReminders(),service.dispatchDeadlineReminders()]);
+    const changed = await reminderRecipients(changing.id);
+    expect(changed).toHaveLength(4);
+    expect(new Set(changed.map(row=>`${row.recipient_id}:${row.deduplication_key}`)).size).toBe(4);
+  });
+
+  it('keeps events distinct and suppresses a submission committed before snapshot; uncommitted races are intentionally not lock-coordinated', async () => {
+    const deadline = (await pool.query<{deadline_at:Date}>(
+      "SELECT clock_timestamp()+interval '1 hour' AS deadline_at")).rows[0]!.deadline_at.toISOString();
+    const created = await api.post(`/api/classes/${id.classA}/assignments`).auth(teacher,{type:'bearer'}).send({
+      title:'Created and reminded',deadlineAt:deadline,maxScore:10,
+    });
+    expect(created.status).toBe(201);
+    const submissionClient = await pool.connect();
+    try {
+      await submissionClient.query('BEGIN');
+      await submissionClient.query('INSERT INTO submissions(assignment_id,enrollment_id) VALUES($1,$2)',
+        [created.body.id,id.enrollment1]);
+      await submissionClient.query('COMMIT');
+    } finally {
+      submissionClient.release();
+    }
+
+    const service = new NotificationService(new NotificationRepository(pool));
+    await service.dispatchDeadlineReminders();
+
+    const student1Kinds = (await pool.query<{kind:string}>(`SELECT kind FROM notifications
+      WHERE assignment_id=$1 AND recipient_id=$2 ORDER BY kind`,[created.body.id,id.student1])).rows;
+    expect(student1Kinds.map(row=>row.kind)).toEqual(['ASSIGNMENT_CREATED']);
+    const student2Kinds = (await pool.query<{kind:string}>(`SELECT kind FROM notifications
+      WHERE assignment_id=$1 AND recipient_id=$2 ORDER BY kind`,[created.body.id,id.student2])).rows;
+    expect(student2Kinds.map(row=>row.kind)).toEqual(['ASSIGNMENT_CREATED','DEADLINE_REMINDER']);
   });
 });
