@@ -121,7 +121,7 @@ export class AssignmentRepository {
     return result.rows[0]!;
   }
 
-  async studentAssignmentState(db: Db, assignmentId: string, studentId: string) {
+  async studentAssignmentState(db: Db, assignmentId: string, studentId: string, classId: string) {
     return (await db.query<{ submitted_at: Date | null; deadline_at_submission: Date | null; graded: boolean }>(`SELECT
       v.submitted_at,v.deadline_at_submission,(g.id IS NOT NULL) AS graded
       FROM enrollments e
@@ -129,7 +129,7 @@ export class AssignmentRepository {
       LEFT JOIN LATERAL (SELECT submitted_at,deadline_at_submission FROM submission_versions
         WHERE submission_id=s.id ORDER BY version_number DESC LIMIT 1) v ON true
       LEFT JOIN grades g ON g.assignment_id=$1 AND g.enrollment_id=e.id
-      WHERE e.student_id=$2 AND e.is_active`, [assignmentId, studentId])).rows[0];
+      WHERE e.student_id=$2 AND e.class_id=$3 AND e.is_active`, [assignmentId, studentId, classId])).rows[0];
   }
 
   async activeEnrollment(db: Db, classId: string, studentId: string, lock = false) {
