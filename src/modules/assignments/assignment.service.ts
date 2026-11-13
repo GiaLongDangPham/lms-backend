@@ -59,7 +59,7 @@ export class AssignmentService {
       const counts = await this.repository.assignmentCounts(db, row.id, row.class_id);
       dto.submittedCount = counts.submitted_count; dto.studentCount = counts.student_count;
     } else if (principal.user.role === 'STUDENT') {
-      const state = await this.repository.studentAssignmentState(db, row.id, principal.user.id);
+      const state = await this.repository.studentAssignmentState(db, row.id, principal.user.id, row.class_id);
       dto.mySubmissionStatus = !state?.submitted_at ? 'NOT_SUBMITTED' : state.graded ? 'GRADED'
         : state.submitted_at > state.deadline_at_submission! ? 'LATE' : 'SUBMITTED';
     }

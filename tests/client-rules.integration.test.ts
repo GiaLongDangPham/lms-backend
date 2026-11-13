@@ -30,7 +30,7 @@ const app = createApp({ corsOrigins: ['http://localhost:5173'], checkDatabase: a
   auth: { secret: randomBytes(32).toString('hex'), issuer: 'rules', audience: 'rules',
     cookieSecure: false, cookieSameSite: 'lax', origins: ['http://localhost:5173'] } } });
 const api = request(app);
-let teacher: string; let teacher2: string; let student: string; let student2: string; let admin: string;
+let teacher: string; let teacher2: string; let student: string; let student2: string; let student3: string; let admin: string;
 async function login(code: string, password = 'B1IntegrationPassword2026!') {
   const r = await api.post('/api/auth/login').send({ schoolCode: code, password }); expect(r.status).toBe(200); return r.body.accessToken as string;
 }
@@ -38,7 +38,7 @@ async function assignment() {
   const r = await pool.query<{id: string}>(`INSERT INTO assignments(class_id,title,deadline_at,max_score,created_by)
     VALUES ($1,'Rules fixture',now()+interval '1 day',10,$2) RETURNING id`, [id.classA,id.teacher1]); return r.rows[0]!.id;
 }
-async function pendingFile(owner=id.student1,size=128) {
+async function pendingFile(owner: string=id.student1,size=128) {
   const fileId=randomUUID();
   await pool.query(`INSERT INTO files(id,storage_provider,storage_container,object_key,
     original_name,mime_type,size_bytes,uploaded_by) VALUES($1,'TEST','private',$2,'answer.pdf',
@@ -58,7 +58,7 @@ describe.skipIf(!target)('B1/B3 client rules and assignments/submissions',()=>{
     const {hashPassword}=await import('../src/security/password.js');
     await pool.query('UPDATE users SET password_hash=$1,must_change_password=false WHERE id=$2',
       [await hashPassword('B1IntegrationPassword2026!'),id.student2]);
-    student2=await login('SV002');
+    student2=await login('SV002');student3=await login('SV003');
   },30000);
   afterAll(async()=>{await pool.end();});
 
@@ -108,6 +108,23 @@ describe.skipIf(!target)('B1/B3 client rules and assignments/submissions',()=>{
     const studentList=await api.get(`/api/classes/${id.classA}/assignments`).auth(student,{type:'bearer'});
     expect(studentList.status).toBe(200);
     expect(studentList.body.items.find((x:{id:string})=>x.id===created.body.id).mySubmissionStatus).toBe('NOT_SUBMITTED');
+  });
+  it('reports a submission from the assignment class when the student belongs to multiple classes',async()=>{
+    const enrollmentId=randomUUID();
+    await pool.query(`INSERT INTO enrollments(id,class_id,student_id,enrolled_by)
+      VALUES($1,$2,$3,$4)`,[enrollmentId,id.classA,id.student3,id.admin]);
+    try {
+      const a=await assignment();
+      const submitted=await api.post(`/api/assignments/${a}/submissions`).auth(student3,{type:'bearer'})
+        .send({fileIds:[await pendingFile(id.student3)]});
+      expect(submitted.status).toBe(201);
+
+      const listed=await api.get(`/api/classes/${id.classA}/assignments`).auth(student3,{type:'bearer'});
+      expect(listed.status).toBe(200);
+      expect(listed.body.items.find((item:{id:string})=>item.id===a).mySubmissionStatus).toBe('SUBMITTED');
+    } finally {
+      await pool.query('UPDATE enrollments SET is_active=false WHERE id=$1',[enrollmentId]);
+    }
   });
   it('locks resubmission as soon as a Draft grade exists without exposing the Draft',async()=>{
     const a=await assignment();const s=await submit(a);expect(s.status).toBe(201);
