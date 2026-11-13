@@ -2,9 +2,10 @@ import type { Principal } from '../b1/auth.js';
 import { ApiError } from '../b1/common.js';
 import { decodeNotificationCursor, encodeNotificationCursor } from './notification.cursor.js';
 import { NotificationRepository } from './notification.repository.js';
-import type { NotificationDto, NotificationRow } from './notification.types.js';
+import type { AssignmentCreatedEvent, NotificationDb, NotificationDto, NotificationPublisher,
+  NotificationRow } from './notification.types.js';
 
-export class NotificationService {
+export class NotificationService implements NotificationPublisher {
   constructor(private readonly repository: NotificationRepository) {}
 
   private studentOnly(principal: Principal): void {
@@ -44,5 +45,9 @@ export class NotificationService {
     const row = await this.repository.markRead(principal.user.id, notificationId);
     if (!row) throw new ApiError(404, 'NOT_FOUND', 'Notification was not found.');
     return this.dto(row);
+  }
+
+  async assignmentCreated(db: NotificationDb, assignment: AssignmentCreatedEvent): Promise<number> {
+    return this.repository.insertAssignmentCreated(db, assignment);
   }
 }

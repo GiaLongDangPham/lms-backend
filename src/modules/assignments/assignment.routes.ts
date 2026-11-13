@@ -6,6 +6,7 @@ import { cursorId, nonempty, paging, parse, uuid } from '../b1/common.js';
 import { AssignmentController } from './assignment.controller.js';
 import { AssignmentRepository } from './assignment.repository.js';
 import { AssignmentService } from './assignment.service.js';
+import type { NotificationPublisher } from '../notifications/notification.types.js';
 
 const preciseScore = z.number().finite().positive().max(9_999_999_999.99).refine(value =>
   Math.abs(value * 100 - Math.round(value * 100)) < 1e-8,
@@ -20,10 +21,10 @@ const updateAssignment = z.object({ title: nonempty.optional(),
   .refine(value => Object.keys(value).length > 0);
 const submitAssignment = z.object({ fileIds: fileIds.min(1) }).strict();
 
-export function createAssignmentRouter(pool: pg.Pool, config: AuthConfig) {
+export function createAssignmentRouter(pool: pg.Pool, config: AuthConfig, notifications: NotificationPublisher) {
   const router = Router();
   const auth = createAuth(pool, config);
-  const controller = new AssignmentController(new AssignmentService(new AssignmentRepository(pool)));
+  const controller = new AssignmentController(new AssignmentService(new AssignmentRepository(pool), notifications));
   router.use(auth.authenticate, requireChangedPassword, (_request, response, next) => {
     response.set('Cache-Control', 'no-store'); next();
   });

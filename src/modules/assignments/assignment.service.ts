@@ -1,6 +1,7 @@
 import { requireClassAccess, type Principal } from '../b1/auth.js';
 import { ApiError, transaction } from '../b1/common.js';
 import { AssignmentRepository, type AssignmentRow, type Db, type FileRow } from './assignment.repository.js';
+import type { NotificationPublisher } from '../notifications/notification.types.js';
 
 const MiB = 1024 * 1024;
 
@@ -16,7 +17,8 @@ export interface AssignmentUpdate {
 }
 
 export class AssignmentService {
-  constructor(private readonly repository: AssignmentRepository) {}
+  constructor(private readonly repository: AssignmentRepository,
+    private readonly notifications: NotificationPublisher) {}
 
   private teacher(principal: Principal): void {
     if (principal.user.role !== 'TEACHER') {
@@ -94,6 +96,7 @@ export class AssignmentService {
         description: input.description ?? null, deadlineAt: input.deadlineAt,
         maxScore: input.maxScore, createdBy: principal.user.id });
       if (fileIds.length) await this.repository.replaceAssignmentFiles(db, row.id, fileIds);
+      await this.notifications.assignmentCreated(db, { id: row.id, classId: row.class_id, title: row.title });
       return this.assignmentDto(db, row, principal);
     });
   }

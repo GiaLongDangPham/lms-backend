@@ -25,3 +25,17 @@ export interface NotificationDto {
   readAt: string | null;
   createdAt: string;
 }
+import type pg from 'pg';
+
+export type NotificationDb = pg.Pool | pg.PoolClient;
+
+
+export interface AssignmentCreatedEvent {
+  id: string;
+  classId: string;
+  title: string;
+}
+
+export interface NotificationPublisher {
+  assignmentCreated(db: NotificationDb, assignment: AssignmentCreatedEvent): Promise<number>;
+}
