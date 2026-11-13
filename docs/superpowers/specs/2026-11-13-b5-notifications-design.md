@@ -2,7 +2,7 @@
 
 **Date:** 13/11/2026  
 **Owner:** Nam  
-**Status:** Proposed for approval
+**Status:** Approved
 
 ## Intent
 
