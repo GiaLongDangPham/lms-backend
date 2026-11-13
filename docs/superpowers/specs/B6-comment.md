@@ -1,6 +1,7 @@
 # B6 - Backend Comment
 
-Ngày: 13/11/2026. Chủ sở hữu: Long. Trạng thái: thiết kế cho implementation.
+Ngày: 13/11/2026. Chủ sở hữu: Long. Trạng thái: đã implement và kiểm tra local;
+còn Nam review, CI và staging/F6 acceptance.
 
 ## Mục tiêu và phạm vi
 
@@ -34,6 +35,8 @@ Review thiết kế, plan và code do chính người implement thực hiện; N
 - Không khóa comment theo deadline/grade/publication: thảo luận kết quả vẫn cần sau công bố.
 - Kiểm tra membership và INSERT trong cùng transaction, khóa membership bằng helper
   `requireClassAccess(..., true)` để ngừng ghi danh/bỏ phân công không chen giữa hai bước.
+  Với SV, bổ sung `FOR SHARE` trên enrollment: `FOR KEY SHARE` của helper hiện tại
+  không chặn UPDATE cột is_active; không sửa helper dùng chung của các module khác.
 
 Contract local còn `x-decision-pending: Q09` cho submission visibility, trong khi PDF dùng
 Q09 cho deadline notification. Quyết định implementation của Long: bảo vệ riêng tư như
@@ -50,6 +53,7 @@ mọi người trong lớp đều được xem bài nộp. Đây là điểm bà
 - GET trả 200 `{items, page:{nextCursor}}`, limit 1..100, mặc định 20; limit+1 để
   xác định trang tiếp theo. Giữ quy ước ORDER BY id tăng dần, cursor UUID của dự án;
   không hứa thứ tự thời gian. Cursor scope gồm loại target và target ID để chống dùng chéo.
+  F6 reset trang sau POST, không dùng UUID cursor làm cơ chế poll sự kiện mới.
 - UUID/query/cursor/body sai trả 400. Cache-Control: no-store. Văn bản được giữ dạng
   plain text, F6 phải render như text (không innerHTML).
 

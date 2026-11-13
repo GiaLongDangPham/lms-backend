@@ -207,6 +207,8 @@ describe.skipIf(!target)('B6 comments HTTP, persistence and authorization', () =
       expect((await get(otherPath).query({ cursor: firstCursor })).status).toBe(400);
     }
     // Submission list uses its own scope and the same bounded paging contract.
+    expect((await post(submissionPath())).status).toBe(201);
+    expect((await post(submissionPath(), teacher)).status).toBe(201);
     const first = await get(submissionPath()).query({ limit: 1 });
     expect(first.status).toBe(200); expect(first.body.page.nextCursor).toBeTypeOf('string');
     const next = await get(submissionPath()).query({ limit: 1, cursor: first.body.page.nextCursor });
