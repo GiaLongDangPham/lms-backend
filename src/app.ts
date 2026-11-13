@@ -23,7 +23,8 @@ import { NotificationService } from './modules/notifications/notification.servic
 interface AppDependencies {
   corsOrigins: string[];
   checkDatabase: () => Promise<void>;
-  business?: { pool: pg.Pool; auth: AuthConfig; loginLimit?: number; storage?: ObjectStorage; uploadLimits?: Partial<UploadLimits> };
+  business?: { pool: pg.Pool; auth: AuthConfig; loginLimit?: number; storage?: ObjectStorage;
+    uploadLimits?: Partial<UploadLimits>; notificationService?: NotificationService };
 }
 
 export function createApp({ corsOrigins, checkDatabase, business }: AppDependencies) {
@@ -60,7 +61,8 @@ export function createApp({ corsOrigins, checkDatabase, business }: AppDependenc
   });
 
   if (business) {
-    const notificationService = new NotificationService(new NotificationRepository(business.pool));
+    const notificationService = business.notificationService
+      ?? new NotificationService(new NotificationRepository(business.pool));
     const assessmentService = new AssessmentService(new AssessmentRepository(business.pool), notificationService);
     const enrollmentService = new EnrollmentService(new EnrollmentRepository(business.pool), assessmentService);
     app.use('/api', createDocsRouter());
