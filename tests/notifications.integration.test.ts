@@ -99,6 +99,25 @@ describe.skipIf(!target)('B5 student notifications', () => {
       .auth(student2,{type:'bearer'})).status).toBe(400);
   });
 
+  it('paginates PostgreSQL microsecond timestamps without skipping rows inside one millisecond', async () => {
+    const newer = randomUUID();
+    const older = randomUUID();
+    await pool.query(`INSERT INTO notifications
+      (id,recipient_id,assignment_id,kind,title,body,deduplication_key,created_at) VALUES
+      ($1,$3,$4,'ASSIGNMENT_CREATED','Micro newer','Body',$5,'2026-11-13T12:00:00.123456Z'),
+      ($2,$3,$4,'ASSIGNMENT_CREATED','Micro older','Body',$6,'2026-11-13T12:00:00.123455Z')`,
+    [newer,older,id.student1,id.assignmentA,`micro-${newer}`,`micro-${older}`]);
+    try {
+      const first = await api.get('/api/notifications').query({limit:1}).auth(student1,{type:'bearer'});
+      expect(first.body.items.map((item:{id:string})=>item.id)).toEqual([newer]);
+      const second = await api.get('/api/notifications')
+        .query({limit:1,cursor:first.body.page.nextCursor}).auth(student1,{type:'bearer'});
+      expect(second.body.items.map((item:{id:string})=>item.id)).toEqual([older]);
+    } finally {
+      await pool.query('DELETE FROM notifications WHERE id=ANY($1::uuid[])',[[newer,older]]);
+    }
+  });
+
   it('restricts the inbox to students', async () => {
     const other = await api.get('/api/notifications').auth(student2,{type:'bearer'});
     expect(other.status).toBe(200);

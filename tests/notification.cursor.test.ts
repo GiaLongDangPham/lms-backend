@@ -5,7 +5,7 @@ import { decodeNotificationCursor, encodeNotificationCursor } from '../src/modul
 
 describe('notification cursor', () => {
   it('round-trips a notification cursor with timestamp, id, and scope', () => {
-    const cursor = { createdAt: new Date('2026-11-13T08:30:00.123Z'), id: randomUUID() };
+    const cursor = { createdAt: '2026-11-13T08:30:00.123456Z', id: randomUUID() };
 
     const encoded = encodeNotificationCursor(cursor, 'notifications:student-1');
 
@@ -14,7 +14,7 @@ describe('notification cursor', () => {
 
   it('rejects malformed cursors and cursors from another scope with VALIDATION_ERROR', () => {
     const cursor = encodeNotificationCursor({
-      createdAt: new Date('2026-11-13T08:30:00.123Z'),
+      createdAt: '2026-11-13T08:30:00.123456Z',
       id: randomUUID(),
     }, 'notifications:student-1');
 

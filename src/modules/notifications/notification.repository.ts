@@ -1,13 +1,14 @@
 import type pg from 'pg';
 import type { AssignmentCreatedEvent, GradePublishedEvent, NotificationCursor, NotificationDb,
-  NotificationRow } from './notification.types.js';
+  NotificationListRow, NotificationRow } from './notification.types.js';
 
 export class NotificationRepository {
   constructor(private readonly pool: pg.Pool) {}
 
   async listForRecipient(recipientId: string, cursor: NotificationCursor | null,
-    limit: number): Promise<NotificationRow[]> {
-    return (await this.pool.query<NotificationRow>(`SELECT id,recipient_id,assignment_id,kind,title,body,read_at,created_at
+    limit: number): Promise<NotificationListRow[]> {
+    return (await this.pool.query<NotificationListRow>(`SELECT id,recipient_id,assignment_id,kind,title,body,read_at,created_at,
+      to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_created_at
       FROM notifications WHERE recipient_id=$1
       AND ($2::timestamptz IS NULL OR (created_at,id)<($2,$3::uuid))
       ORDER BY created_at DESC,id DESC LIMIT $4`,

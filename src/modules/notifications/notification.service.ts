@@ -36,7 +36,7 @@ export class NotificationService implements NotificationPublisher {
     return {
       items: pageRows.map(row => this.dto(row)),
       page: { nextCursor: rows.length > limit && last
-        ? encodeNotificationCursor({ createdAt: last.created_at, id: last.id }, scope) : null },
+        ? encodeNotificationCursor({ createdAt: last.cursor_created_at, id: last.id }, scope) : null },
     };
   }
 

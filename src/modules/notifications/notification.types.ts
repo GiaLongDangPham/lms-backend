@@ -1,5 +1,5 @@
 export interface NotificationCursor {
-  createdAt: Date;
+  createdAt: string;
   id: string;
 }
 
@@ -14,6 +14,10 @@ export interface NotificationRow {
   body: string;
   read_at: Date | null;
   created_at: Date;
+}
+
+export interface NotificationListRow extends NotificationRow {
+  cursor_created_at: string;
 }
 
 export interface NotificationDto {
