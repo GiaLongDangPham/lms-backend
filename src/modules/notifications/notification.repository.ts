@@ -1,5 +1,6 @@
 import type pg from 'pg';
-import type { AssignmentCreatedEvent, NotificationCursor, NotificationDb, NotificationRow } from './notification.types.js';
+import type { AssignmentCreatedEvent, GradePublishedEvent, NotificationCursor, NotificationDb,
+  NotificationRow } from './notification.types.js';
 
 export class NotificationRepository {
   constructor(private readonly pool: pg.Pool) {}
@@ -31,5 +32,12 @@ export class NotificationRepository {
     [assignment.id,assignment.classId,`Bài tập "${assignment.title}" đã được giao.`,
       `assignment-created:${assignment.id}`]);
     return result.rowCount ?? 0;
+  }
+
+  async insertGradePublished(db: NotificationDb, grade: GradePublishedEvent, studentId: string): Promise<void> {
+    await db.query(`INSERT INTO notifications(recipient_id,assignment_id,kind,title,body,deduplication_key)
+      VALUES($1,$2,'GRADE_PUBLISHED','Kết quả bài tập','Kết quả bài tập đã được cập nhật.',$3)
+      ON CONFLICT(recipient_id,deduplication_key) DO NOTHING`,
+    [studentId,grade.assignmentId,`grade:${grade.id}:${grade.revision}`]);
   }
 }

@@ -61,7 +61,7 @@ export function createApp({ corsOrigins, checkDatabase, business }: AppDependenc
 
   if (business) {
     const notificationService = new NotificationService(new NotificationRepository(business.pool));
-    const assessmentService = new AssessmentService(new AssessmentRepository(business.pool));
+    const assessmentService = new AssessmentService(new AssessmentRepository(business.pool), notificationService);
     const enrollmentService = new EnrollmentService(new EnrollmentRepository(business.pool), assessmentService);
     app.use('/api', createDocsRouter());
     app.use('/api', createB1Router(business.pool, business.auth, enrollmentService, business.loginLimit));

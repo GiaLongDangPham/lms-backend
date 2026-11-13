@@ -2,7 +2,7 @@ import type { Principal } from '../b1/auth.js';
 import { ApiError } from '../b1/common.js';
 import { decodeNotificationCursor, encodeNotificationCursor } from './notification.cursor.js';
 import { NotificationRepository } from './notification.repository.js';
-import type { AssignmentCreatedEvent, NotificationDb, NotificationDto, NotificationPublisher,
+import type { AssignmentCreatedEvent, GradePublishedEvent, NotificationDb, NotificationDto, NotificationPublisher,
   NotificationRow } from './notification.types.js';
 
 export class NotificationService implements NotificationPublisher {
@@ -49,5 +49,9 @@ export class NotificationService implements NotificationPublisher {
 
   async assignmentCreated(db: NotificationDb, assignment: AssignmentCreatedEvent): Promise<number> {
     return this.repository.insertAssignmentCreated(db, assignment);
+  }
+
+  async resultPublished(db: NotificationDb, grade: GradePublishedEvent, studentId: string): Promise<void> {
+    await this.repository.insertGradePublished(db, grade, studentId);
   }
 }

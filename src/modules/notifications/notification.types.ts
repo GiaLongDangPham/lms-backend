@@ -36,6 +36,13 @@ export interface AssignmentCreatedEvent {
   title: string;
 }
 
+export interface GradePublishedEvent {
+  id: string;
+  assignmentId: string;
+  revision: number;
+}
+
 export interface NotificationPublisher {
   assignmentCreated(db: NotificationDb, assignment: AssignmentCreatedEvent): Promise<number>;
+  resultPublished(db: NotificationDb, grade: GradePublishedEvent, studentId: string): Promise<void>;
 }
