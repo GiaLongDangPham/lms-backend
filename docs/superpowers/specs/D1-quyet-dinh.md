@@ -1,6 +1,6 @@
 # D1 · Quyết định đã chốt và còn mở
 
-Cập nhật: 24/10/2026. Long đã chốt mã trường để đăng nhập, UUID, migration SQL có
+Cập nhật: 13/11/2026. Long đã chốt mã trường để đăng nhập, UUID, migration SQL có
 phiên bản dùng pg và mô hình lớp ở L20. Nhóm đã chốt thêm Q05-Q08 cho bài tập, bài
 nộp, điểm và file. Các phần khác vẫn chờ duyệt.
 
@@ -29,7 +29,7 @@ B1 triển khai JWT access token, refresh session, đổi mật khẩu và thu h
 | Q06 | Có cho nộp lại sau deadline khi đã có bài? Có cho nộp lại sau chấm/Publish? Khi nộp lại thì giữ, ẩn hay reset điểm cũ? | Giữ version bất biến. Bài đã có Grade, kể cả Draft, không được nộp lại. Nếu đã có submission thì chỉ tạo version mới đến deadline hiện tại; quá hạn phải chờ GV gia hạn. Lần nộp đầu vẫn có thể Late. | Client Log #18 + chốt bổ sung 24/10/2026 |
 | Q07 | Đúng deadline có Late không? Giờ nhận bài là khi upload xong hay lúc bắt đầu? Sửa deadline có đổi trạng thái bài cũ không? | Đúng deadline là đúng hạn. submitted_at là giờ server khi transaction version + file links commit thành công. GV được sửa deadline dù đã có submission; bản cũ giữ snapshot và Late lịch sử, deadline mới chỉ chi phối lần nộp tương lai. | Chốt 24/10/2026 |
 | Q08 | File nào được phép, tối đa bao nhiêu file/MB? Đề bài có file? Một object có được dùng chung? Xóa file xử lý thế nào? | Allowlist tài liệu, bảng tính, slide, text/data, source, ảnh và ZIP; `.docx`, `.xls`, `.cpp`, `.py` được phép. Chặn executable, system script, Office macro, file không đuôi/đuôi lạ, `.rar`, `.7z` và MIME/nội dung không khớp. 25 MiB/file; 10 file/resource hoặc version; 100 MiB/version. ZIP tối đa 100 entry, 200 MiB giải nén, tỷ lệ 20:1; chặn archive lồng, symlink, path traversal và file cấm bên trong. Private S3-compatible storage; PENDING → ATTACHED, orphan PENDING sau 24 giờ, DELETE_PENDING để retry. | Chốt 24/10/2026; cần migration mới trước B2/B3 |
-| Q09 | Comment trên bài tập ai xem? Comment trên bài nộp/kết quả có riêng tư không? Nhắc deadline trước bao lâu và gửi lại thế nào? | Comment bài tập cho thành viên lớp; comment hồ sơ chỉ SV chủ bài + GV của lớp; chưa thread/realtime. Không nhúng điểm Draft trong notification. Giờ nhắc do nhóm chốt ở B5. | Target comment tại CP1; quyền/rule trước B5/B6 |
+| Q09 | Comment trên bài tập ai xem? Comment trên bài nộp/kết quả có riêng tư không? Nhắc deadline trước bao lâu và gửi lại thế nào? | Comment bài tập cho thành viên lớp; comment hồ sơ chỉ SV chủ bài + GV của lớp; chưa thread/realtime. B5 nhắc một lần cho mỗi SV/deadline hiện tại khi còn `(0, 24h]`, không nhúng điểm Draft và chưa có announcement. | Notification chốt 13/11/2026; comment tiếp tục ở B6 |
 | Q10 | Xóa/vô hiệu hóa user/lớp/enrollment thế nào khi đã có bài nộp/điểm? Thôi học rồi ghi danh lại có giữ lịch sử không? | Vô hiệu hóa/archiving để giữ lịch sử; chặn hard-delete cha còn dữ liệu; chỉ cascade bảng nối khi xóa cha được cho phép. Quyền xem sau thôi học cần Kha chốt riêng. Khi tạo enrollment hoặc kích hoạt lại sau khi bài đã công bố, transaction tạo kết quả 0 Published còn thiếu; giữ grade/history đã có, không tạo submission/version giả và không mở khóa nộp. | Quy tắc ghi danh sau công bố chốt 24/10/2026; quyền xem sau thôi học vẫn cần Kha chốt |
 
 L05 về ghi chú gửi giảng viên chưa được Kha chốt. B3 không expose `note` trong public
@@ -49,7 +49,7 @@ Chỉ ghi các quyết định Long đã xác nhận; phần còn mở cần bi�
 | Q06 | Đã chốt | Nhóm | 24/10/2026 | Client Log #18 + trao đổi cập nhật specification | submissions, versions, grades |
 | Q07 | Đã chốt | Nhóm | 24/10/2026 | Trao đổi cập nhật specification | deadline snapshot, timestamp |
 | Q08 | Đã chốt | Nhóm | 24/10/2026 | Trao đổi cập nhật specification | files, lifecycle, attachments |
-| Q09 | Chưa chốt | — | — | — | comments, notifications |
+| Q09 | Notification: nhắc trong 24 giờ, một lần/người/deadline; worker trong API dùng giờ PostgreSQL; chưa có announcement. Comment còn mở. | Long/leader | 13/11/2026 | [Thiết kế B5](2026-11-13-b5-notifications-design.md) | notification dedup/index; không đổi schema contract |
 | Q10 | Vô hiệu hóa user/ghi danh và ghi danh lại giữ enrollment ID; thêm 0 Published còn thiếu khi ghi danh vào bài đã công bố | Nhóm | 24/10/2026 | Trao đổi cập nhật specification | session revocation, FK giữ lịch sử; transaction tạo grade |
 
 ## Phạm vi implementation local trước review
@@ -61,6 +61,9 @@ Chỉ ghi các quyết định Long đã xác nhận; phần còn mở cần bi�
   buộc thời điểm/người công bố đi cùng nhau và giữ provenance công bố bất biến.
   Assignment service/repository liên quan đã có trong nhánh; actor chỉ lưu nội bộ
   trong database.
+- `0007_b5_notifications.sql` thêm index phân trang inbox. B5 phát sự kiện tạo bài,
+  công bố kết quả và reminder; reminder chạy mỗi 5 phút trong tiến trình API, vì vậy
+  production phải luôn có ít nhất một API instance hoạt động.
 - FK dùng RESTRICT để không tự xóa dây chuyền lịch sử. B1 có API vô hiệu hóa tài
   khoản/ghi danh; chưa có archive lớp hoặc hard-delete qua API.
 - Khi đổi schema sau khi đã áp dụng `0001`, tạo migration tiếp theo; không sửa file

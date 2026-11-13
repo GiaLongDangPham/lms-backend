@@ -30,6 +30,10 @@ constraint deferred giới hạn 10 file/tài liệu theo Q08. Nếu tài liệu
 0001–0005 được giữ nguyên. Bản thiết kế CP1 gọi phần sửa là “0002”, nhưng trong
 repo 0002 đã dành cho auth; các sửa L04/L14/L20 đã nằm trong 0003, không đổi số lại.
 
+`0007_b5_notifications.sql` thêm index `(recipient_id, created_at DESC, id DESC)`
+cho cursor inbox. Migration không backfill notification; worker B5 dùng deadline hiện
+tại và khóa dedup đã có. Giữ nguyên checksum 0001–0007 sau khi đã áp dụng.
+
 - Đọc các file `NNNN_mo_ta.sql` theo thứ tự. Không dùng trùng số phiên bản.
 - Lưu tên file, SHA-256 và thời điểm áp dụng trong `schema_migrations` (bảng hạ tầng
   ngoài 18 bảng nghiệp vụ/auth).

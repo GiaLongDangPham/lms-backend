@@ -9,6 +9,7 @@ B3/B4 của thành viên khác giữ nguyên tên, vị trí và nội dung.
 | S1 · Môi trường | [S1-moi-truong](specs/S1-moi-truong.md) | [S1-moi-truong](plans/S1-moi-truong.md) | [Kiểm tra local](plans/S1-kiem-tra.md), [câu hỏi kickoff/checkpoint](plans/S1-cau-hoi.md) |
 | D1 · Database | [D1-database](specs/D1-database.md) | [D1-database](plans/D1-database.md) | [Quyết định](specs/D1-quyet-dinh.md), [ERD](specs/D1-erd.md), [kiểm tra local](plans/D1-kiem-tra.md) |
 | D1/B1/B2/F2 · Tuần 02 | [D1-B1-B2-F2-tuan-02](specs/D1-B1-B2-F2-tuan-02.md) | [D1-B1-B2-F2-tuan-02](plans/D1-B1-B2-F2-tuan-02.md) | Sẵn sàng PR; còn CI/review/staging |
+| B5 · Notifications | [Thiết kế B5](specs/2026-11-13-b5-notifications-design.md) | [Kế hoạch B5](plans/2026-11-13-b5-notifications.md) | Inbox, publisher và reminder 24 giờ đã hiện thực |
 
 ## Cách đọc và cập nhật
 
