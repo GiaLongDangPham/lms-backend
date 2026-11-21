@@ -1,6 +1,7 @@
 import type { Principal } from '../b1/auth.js';
 import { ApiError, transaction } from '../b1/common.js';
 import { AssessmentRepository, type Db, type GradeRow } from './assessment.repository.js';
+import type { NotificationPublisher } from '../notifications/notification.types.js';
 
 export interface PublishedResultBackfill {
   backfillPublishedResultsForEnrollment(db: import('pg').PoolClient, classId: string,
@@ -65,7 +66,8 @@ export interface AssignmentGradePublication {
 }
 
 export class AssessmentService {
-  constructor(private readonly repository: AssessmentRepository) {}
+  constructor(private readonly repository: AssessmentRepository,
+    private readonly notifications: NotificationPublisher) {}
 
   async backfillPublishedResultsForEnrollment(db: import('pg').PoolClient, classId: string,
     enrollmentId: string): Promise<number> {
@@ -76,7 +78,8 @@ export class AssessmentService {
       if (!grade) continue;
       inserted += 1;
       const studentId = await this.repository.enrollmentStudentId(db, enrollmentId);
-      await this.repository.notifyResult(db, grade, studentId);
+      await this.notifications.resultPublished(db,
+        { id: grade.id, assignmentId: grade.assignment_id, revision: grade.revision }, studentId);
     }
     return inserted;
   }
@@ -195,7 +198,8 @@ export class AssessmentService {
         feedbackProvided: input.feedback !== undefined,
         teacherId: principal.user.id,
       });
-      if (grade.status === 'PUBLISHED') await this.repository.notifyResult(db, grade, submission.student_id);
+      if (grade.status === 'PUBLISHED') await this.notifications.resultPublished(db,
+        { id: grade.id, assignmentId: grade.assignment_id, revision: grade.revision }, submission.student_id);
       return this.gradeDto(db, grade);
     });
   }
@@ -217,7 +221,8 @@ export class AssessmentService {
         teacherId: principal.user.id,
       });
       if (!grade) throw new ApiError(404, 'NOT_FOUND', 'No Published result without a submission exists.');
-      await this.repository.notifyResult(db, grade, studentId);
+      await this.notifications.resultPublished(db,
+        { id: grade.id, assignmentId: grade.assignment_id, revision: grade.revision }, studentId);
       return this.gradeDto(db, grade);
     });
   }
@@ -256,7 +261,8 @@ export class AssessmentService {
       }
       await this.repository.publishDraftGrades(db, assignmentId, enrollmentIds, principal.user.id);
       const results = await this.repository.publishedResults(db, assignmentId, enrollmentIds);
-      for (const grade of results) await this.repository.notifyResult(db, grade, grade.student_id);
+      for (const grade of results) await this.notifications.resultPublished(db,
+        { id: grade.id, assignmentId: grade.assignment_id, revision: grade.revision }, grade.student_id);
       const publishedAt = await this.repository.recordAssignmentPublication(db, assignmentId, principal.user.id);
       return { assignmentId, publishedCount: results.length, automaticZeroCount,
         publishedAt: publishedAt.toISOString() };

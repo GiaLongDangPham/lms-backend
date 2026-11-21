@@ -17,11 +17,15 @@ import { createMaterialRouter } from './modules/materials/material.routes.js';
 import type { ObjectStorage } from './modules/materials/storage.js';
 import type { UploadLimits } from './modules/materials/upload-limits.js';
 import { createCommentRouter } from './modules/comments/comment.routes.js';
+import { createNotificationRouter } from './modules/notifications/notification.routes.js';
+import { NotificationRepository } from './modules/notifications/notification.repository.js';
+import { NotificationService } from './modules/notifications/notification.service.js';
 
 interface AppDependencies {
   corsOrigins: string[];
   checkDatabase: () => Promise<void>;
-  business?: { pool: pg.Pool; auth: AuthConfig; loginLimit?: number; storage?: ObjectStorage; uploadLimits?: Partial<UploadLimits> };
+  business?: { pool: pg.Pool; auth: AuthConfig; loginLimit?: number; storage?: ObjectStorage;
+    uploadLimits?: Partial<UploadLimits>; notificationService?: NotificationService };
 }
 
 export function createApp({ corsOrigins, checkDatabase, business }: AppDependencies) {
@@ -58,13 +62,16 @@ export function createApp({ corsOrigins, checkDatabase, business }: AppDependenc
   });
 
   if (business) {
-    const assessmentService = new AssessmentService(new AssessmentRepository(business.pool));
+    const notificationService = business.notificationService
+      ?? new NotificationService(new NotificationRepository(business.pool));
+    const assessmentService = new AssessmentService(new AssessmentRepository(business.pool), notificationService);
     const enrollmentService = new EnrollmentService(new EnrollmentRepository(business.pool), assessmentService);
     app.use('/api', createDocsRouter());
     app.use('/api', createB1Router(business.pool, business.auth, enrollmentService, business.loginLimit));
     app.use('/api', createMaterialRouter(business.pool, business.auth, business.storage, business.uploadLimits));
-    app.use('/api', createAssignmentRouter(business.pool, business.auth));
+    app.use('/api', createAssignmentRouter(business.pool, business.auth, notificationService));
     app.use('/api', createAssessmentRouter(business.pool, business.auth, assessmentService));
+    app.use('/api', createNotificationRouter(business.pool, business.auth, notificationService));
     app.use('/api', createCommentRouter(business.pool, business.auth));
   }
   app.use((_request, response) => {

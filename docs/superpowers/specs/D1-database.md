@@ -3,7 +3,7 @@
 [Kế hoạch/checklist](../plans/D1-database.md) · [Quyết định](D1-quyet-dinh.md) ·
 [ERD](D1-erd.md) · [Kiểm tra local](../plans/D1-kiem-tra.md).
 
-Ngày chuẩn bị: 11/10/2026 · Cập nhật: 17/10/2026 · Long phụ trách.
+Ngày chuẩn bị: 11/10/2026 · Cập nhật: 13/11/2026 · Long phụ trách.
 
 Đã đối chiếu D2 commit 532f983 và Client Log 18–20/L04/L05/L14/L20. Migration `0003`
 cập nhật dữ liệu cũ từ 0001/0002; không sửa migration đã áp dụng. Các phần chưa chốt
@@ -228,11 +228,14 @@ xóa file khỏi storage không tự xảy ra khi xóa dòng DB; phải có bư�
 - `assignment_id uuid NULL` — FK → assignments.
 - `kind text`: đề xuất ASSIGNMENT_CREATED/DEADLINE_REMINDER/GRADE_PUBLISHED.
 - `title text`, `body text`, `read_at timestamptz NULL`, `created_at timestamptz`.
-- `deduplication_key text NULL`; UNIQUE `(recipient_id, deduplication_key)` để tránh
-  gửi lặp một sự kiện cho cùng người, cách tạo key sẽ do B5 chốt.
+- `deduplication_key text NULL`; UNIQUE `(recipient_id, deduplication_key)` chống lặp.
+  Reminder dùng assignment + deadline UTC hiện tại, nên đổi deadline tạo đúng một key mới.
 - Title/body là nội dung sự kiện tại lúc phát sinh, không phải bản sao luôn đồng bộ
   của bản ghi nghiệp vụ. Không đưa điểm/feedback Draft vào thông báo.
 - Đề xuất trạng thái đọc qua read_at, không lưu thêm is_read có thể lệch nhau.
+- Dispatcher dùng một snapshot `clock_timestamp()` của PostgreSQL và chỉ chọn deadline
+  trong `(now, now + 24h]`; bỏ qua SV đã nộp/có grade, enrollment/user inactive hoặc
+  bài đã công bố. `ON CONFLICT` bảo đảm chạy lặp/song song không tạo trùng.
 
 ### `comments`
 
@@ -284,7 +287,7 @@ Index ngoài PK/UNIQUE nên xem xét cho:
 | `materials` | class_id/created_at | Nội dung theo lớp |
 | `assignments` | class_id/deadline_at | Bài tập theo lớp/deadline |
 | `submissions` | enrollment_id | Hồ sơ nộp của SV |
-| `notifications` | recipient_id/created_at; partial index chưa đọc nếu cần | Chuông và danh sách thông báo |
+| `notifications` | recipient_id/created_at/id (0007) | Inbox theo cursor mới nhất trước |
 | `comments` | assignment_id/created_at; submission_id/created_at | Comment theo target |
 | Bảng gắn file | file_id | Tra quyền, kiểm tra tham chiếu và dọn file |
 

@@ -96,7 +96,9 @@ API thật hiện có B1, B3 assignment/submission và các route chấm/công b
 ghi danh mới hoặc kích hoạt lại sau công bố cũng tạo kết quả 0 Published còn thiếu
 trong cùng transaction. API không trả thông tin người công bố toàn bài.
 Upload/download S3, tài liệu và bulk enrollment đã triển khai trong B1/B2.
-Thông báo B5 còn dành cho module tiếp theo; B6 Comment đã có API như bên dưới. Upload/download cần cấu hình
+Thông báo B5 đã có inbox SV, đánh dấu đã đọc, sự kiện giao bài/công bố điểm và nhắc
+deadline trong 24 giờ; B6 Comment đã có API như bên dưới, còn announcement dành
+cho module tiếp theo. Upload/download cần cấu hình
 private bucket; thiếu cấu hình hoặc storage lỗi trả `503 STORAGE_UNAVAILABLE`.
 JSON dùng camelCase; danh sách trả `{ items, page: { nextCursor } }`, query
 `limit` (1–100, mặc định 20) và `cursor` từ trang trước. Không dùng offset/page number.
@@ -138,10 +140,15 @@ Ghi danh lại tái sử dụng enrollment ID cũ. Không có hard-delete user/l
 
 Migration `0002_b1_auth.sql` thêm `users.must_change_password`, `auth_sessions`
 và `auth_refresh_tokens`; `0003_client_rules.sql` bổ sung nghiệp vụ điểm/lớp;
-`0004_b3_assignments_submissions.sql` bổ sung precision, lifecycle và giới hạn file.
+`0004_b3_assignments_submissions.sql` bổ sung precision, lifecycle và giới hạn file;
+`0007_b5_notifications.sql` thêm index cursor cho inbox.
 Không migration nào sửa lịch sử đã áp dụng. ERD hiện có 16 bảng nghiệp vụ và 2 bảng auth.
 Module sau dùng lại `createAuth().authenticate`,
 `requireChangedPassword`, `requireClassAccess` trong `src/modules/b1/auth.ts`.
+
+Worker reminder chạy ngay khi API listen thành công và lặp mỗi 5 phút. Điều kiện
+`(0, 24h]`, eligibility và dedup theo deadline UTC dùng đồng hồ PostgreSQL; production
+phải duy trì ít nhất một API instance. SIGINT/SIGTERM dừng worker trước khi đóng pool.
 
 CI của D2 thất bại ở ESLint: thiếu khai báo Node globals trong file mock và một biến
 không dùng. Bản nhập vào B1 đã sửa bằng import Node rõ ràng và bỏ biến đó. Chưa push

@@ -221,10 +221,4 @@ export class AssessmentRepository {
       [userId])).rows[0]!;
   }
 
-  async notifyResult(db: Db, grade: GradeRow, studentId: string) {
-    await db.query(`INSERT INTO notifications(recipient_id,assignment_id,kind,title,body,deduplication_key)
-      VALUES($1,$2,'GRADE_PUBLISHED','Kết quả bài tập','Kết quả bài tập đã được cập nhật.',$3)
-      ON CONFLICT(recipient_id,deduplication_key) DO NOTHING`,
-    [studentId, grade.assignment_id, `grade:${grade.id}:${grade.revision}`]);
-  }
 }
