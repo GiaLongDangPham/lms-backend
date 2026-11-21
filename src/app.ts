@@ -16,6 +16,7 @@ import { createAssignmentRouter } from './modules/assignments/assignment.routes.
 import { createMaterialRouter } from './modules/materials/material.routes.js';
 import type { ObjectStorage } from './modules/materials/storage.js';
 import type { UploadLimits } from './modules/materials/upload-limits.js';
+import { createCommentRouter } from './modules/comments/comment.routes.js';
 import { createNotificationRouter } from './modules/notifications/notification.routes.js';
 import { NotificationRepository } from './modules/notifications/notification.repository.js';
 import { NotificationService } from './modules/notifications/notification.service.js';
@@ -71,6 +72,7 @@ export function createApp({ corsOrigins, checkDatabase, business }: AppDependenc
     app.use('/api', createAssignmentRouter(business.pool, business.auth, notificationService));
     app.use('/api', createAssessmentRouter(business.pool, business.auth, assessmentService));
     app.use('/api', createNotificationRouter(business.pool, business.auth, notificationService));
+    app.use('/api', createCommentRouter(business.pool, business.auth));
   }
   app.use((_request, response) => {
     response.status(404).json({

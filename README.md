@@ -11,6 +11,11 @@ mô tả thiết kế và tiêu chí nghiệm thu; [implementation plan](docs/su
 chứa checklist, evidence, cấu hình S3/cleanup và các bước staging/review còn lại.
 Xem [mục lục specs/plans](docs/superpowers/README.md) để theo dõi cùng team.
 
+Cập nhật B6 (13/11/2026): đã implement API Comment cho bài tập và bài nộp,
+có kiểm thử HTTP/PostgreSQL và phân quyền. Xem [spec B6](docs/superpowers/specs/B6-comment.md)
+và [plan/evidence B6](docs/superpowers/plans/B6-comment.md). Chưa thay thế Nam review,
+CI hoặc nghiệm thu staging/F6.
+
 ## Chạy local
 
 Yêu cầu: Node.js 22 (tối thiểu 22.13), npm, Git. PostgreSQL 17 qua Docker Desktop
@@ -92,7 +97,8 @@ ghi danh mới hoặc kích hoạt lại sau công bố cũng tạo kết quả 
 trong cùng transaction. API không trả thông tin người công bố toàn bài.
 Upload/download S3, tài liệu và bulk enrollment đã triển khai trong B1/B2.
 Thông báo B5 đã có inbox SV, đánh dấu đã đọc, sự kiện giao bài/công bố điểm và nhắc
-deadline trong 24 giờ; announcement và comment còn dành cho module tiếp theo. Upload/download cần cấu hình
+deadline trong 24 giờ; B6 Comment đã có API như bên dưới, còn announcement dành
+cho module tiếp theo. Upload/download cần cấu hình
 private bucket; thiếu cấu hình hoặc storage lỗi trả `503 STORAGE_UNAVAILABLE`.
 JSON dùng camelCase; danh sách trả `{ items, page: { nextCursor } }`, query
 `limit` (1–100, mặc định 20) và `cursor` từ trang trước. Không dùng offset/page number.
@@ -157,6 +163,31 @@ riêng, đã dừng sau đó. Docker đã chạy lại; migration `0002` đã á
 Docker; login, refresh và logout từ origin Swagger local cũng đã kiểm tra thành công.
 CP1, Nam review, frontend integration và kiểm thử staging vẫn cần hoàn tất trước
 khi đánh dấu B1 Done. Chưa có kết quả GitHub CI cho các thay đổi local này.
+
+## B6 Comment và bàn giao F6
+
+- GET/POST `/api/assignments/{assignmentId}/comments`: thảo luận của GV được phân
+  công và SV ghi danh active trong lớp.
+- GET/POST `/api/submissions/{submissionId}/comments`: chỉ chủ bài nộp còn ghi danh
+  active và GV được phân công; SV khác cùng lớp không được xem/gửi comment bài của nhau.
+- Cần Bearer token hợp lệ và đã đổi mật khẩu tạm. ADMIN không tham gia comment (403);
+  target không tồn tại hoặc ngoài quyền truy cập trả 404.
+- POST `{ "body": "Nội dung câu hỏi" }` trả 201; body trim và không được rỗng, không
+  nhận authorId/target/reply từ client. Nội dung là plain text, FE không dùng innerHTML.
+- GET hỗ trợ `limit` 1..100 (mặc định 20), `cursor`; response `{ items, page: { nextCursor } }`.
+  Sắp theo UUID tăng dần như các module hiện tại, không bảo đảm thứ tự thời gian.
+  Đổi target phải reset cursor; sau POST nên tải lại trang đầu để không bỏ sót UUID mới.
+- Comment vẫn hoạt động sau deadline/chấm/công bố; response chỉ chứa comment và danh
+  tính hiển thị của tác giả, không kèm grade, feedback Draft hay email.
+- Chạy B6 với database test local: `node node_modules/tsx/dist/cli.mjs scripts/test-api.ts --comments`.
+  Runner tạo/migrate/seed/xóa DB tạm; không dùng DB LMS để chứa fixture test.
+
+Điểm cần Nam/Kha xác nhận trước merge: OpenAPI còn đánh dấu Q09 cho submission
+visibility, trong khi kế hoạch tuần 05–06 dùng Q09 cho nhắc deadline. Implementation
+giữ thảo luận bài nộp riêng tư theo summary hiện có trong contract. Bàn giao staging:
+deploy commit đã review theo cấu hình hiện có (không cần migration mới), cho Khang thử
+hai GV/SV cùng lớp, SV khác chủ bài và SV ngoài lớp; ghi kết quả vào issue B6 trước đóng.
+Repo hiện chỉ có workflow CI, chưa có cấu hình hoặc URL deploy staging đã xác nhận.
 
 ## Thay đổi nghiệp vụ 17/10 và bàn giao frontend
 
