@@ -38,6 +38,7 @@ export interface AssignmentCreatedEvent {
   id: string;
   classId: string;
   title: string;
+  deadlineAt: Date;
 }
 
 export interface GradePublishedEvent {
