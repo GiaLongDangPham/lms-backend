@@ -3420,7 +3420,25 @@
               null
             ],
             "example": "SUBMITTED",
-            "description": "Present for students in assignment list responses; GRADED does not expose Draft score"
+            "description": "Present for students; GRADED includes AUTO_ZERO_NO_SUBMISSION and does not expose Draft score"
+          },
+          "canSubmit": {
+            "type": "boolean",
+            "example": false,
+            "description": "Present for students. False when a grade/publication or an expired resubmission window locks submission. A first submission may still be late."
+          },
+          "lockedReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "GRADED",
+              "DEADLINE_PASSED",
+              null
+            ],
+            "example": "GRADED",
+            "description": "Present for students and explains canSubmit=false without requiring a Submission resource"
           },
           "createdAt": {
             "$ref": "#/components/schemas/Timestamp"
@@ -3785,6 +3803,7 @@
           "score",
           "status",
           "source",
+          "gradedBy",
           "publishedBy",
           "publishedAt"
         ],
@@ -3832,6 +3851,9 @@
           "source": {
             "$ref": "#/components/schemas/GradeSource"
           },
+          "gradedBy": {
+            "$ref": "#/components/schemas/UserSummary"
+          },
           "publishedBy": {
             "$ref": "#/components/schemas/UserSummary"
           },
@@ -3841,7 +3863,7 @@
             "example": "2026-10-20T11:00:00Z"
           }
         },
-        "description": "Student-safe result. AUTO_ZERO_NO_SUBMISSION has null submissionId and gradedVersionNumber."
+        "description": "Student-safe result. gradedBy identifies the grading actor independently of publishedBy. AUTO_ZERO_NO_SUBMISSION has null submissionId and gradedVersionNumber."
       },
       "Notification": {
         "type": "object",
@@ -4085,7 +4107,8 @@
         "type": "object",
         "required": [
           "items",
-          "page"
+          "page",
+          "unreadCount"
         ],
         "properties": {
           "items": {
@@ -4096,6 +4119,12 @@
           },
           "page": {
             "$ref": "#/components/schemas/PageInfo"
+          },
+          "unreadCount": {
+            "type": "integer",
+            "minimum": 0,
+            "example": 3,
+            "description": "Total unread notifications for the caller across the whole inbox, independent of this page"
           }
         }
       },

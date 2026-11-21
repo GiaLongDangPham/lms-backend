@@ -65,6 +65,19 @@ describe('D2 OpenAPI contract', () => {
     expect(correctUnsubmitted({ score: 8, feedback: 'x'.repeat(5001) })).toBe(false);
     expect(correctUnsubmitted({ score: 8, unexpected: true })).toBe(false);
   });
+  it('documents student assignment capability without requiring a submission resource', () => {
+    const spec = JSON.parse(readFileSync('docs/openapi.json', 'utf8'));
+    const properties = spec.components.schemas.Assignment.properties;
+    expect(properties.canSubmit).toMatchObject({ type: 'boolean' });
+    expect(properties.lockedReason.enum).toEqual(['GRADED', 'DEADLINE_PASSED', null]);
+    expect(properties.mySubmissionStatus.description).toContain('AUTO_ZERO_NO_SUBMISSION');
+  });
+  it('documents the whole-inbox unread notification total', () => {
+    const spec = JSON.parse(readFileSync('docs/openapi.json', 'utf8'));
+    const schema = spec.components.schemas.NotificationPage;
+    expect(schema.required).toContain('unreadCount');
+    expect(schema.properties.unreadCount).toMatchObject({ type:'integer',minimum:0 });
+  });
   it('keeps Draft-only fields out of student grade/history and publication blockers', () => {
     const spec = JSON.parse(readFileSync('docs/openapi.json', 'utf8'));
     const ajv = new Ajv2020({ strict: false, allErrors: true });
@@ -75,11 +88,19 @@ describe('D2 OpenAPI contract', () => {
     const publicationBlocked = ajv.compile({ $ref: 'contract#/components/schemas/AssignmentPublicationError' });
     const student = { id: '10000000-0000-4000-8000-000000000004', schoolCode: 'SV001',
       fullName: 'Student', role: 'STUDENT' };
+    const grader = { id: '10000000-0000-4000-8000-000000000002', schoolCode: 'GV002',
+      fullName: 'Grader', role: 'TEACHER' };
+    const publisher = { id: '10000000-0000-4000-8000-000000000001', schoolCode: 'GV001',
+      fullName: 'Publisher', role: 'TEACHER' };
     const published = { assignmentId: '50000000-0000-4000-8000-000000000001', student,
       submissionId: null, gradedVersionNumber: null, score: 0, feedback: null, status: 'PUBLISHED',
-      source: 'AUTO_ZERO_NO_SUBMISSION', publishedBy: student, publishedAt: '2026-10-26T00:00:00Z' };
+      source: 'AUTO_ZERO_NO_SUBMISSION', gradedBy: grader, publishedBy: publisher,
+      publishedAt: '2026-10-26T00:00:00Z' };
     expect(publishedGrade(published)).toBe(true);
-    expect(publishedGrade({ ...published, gradedBy: student, gradedAt: '2026-10-26T00:00:00Z' })).toBe(false);
+    const missingGrader: Record<string,unknown> = { ...published };
+    delete missingGrader.gradedBy;
+    expect(publishedGrade(missingGrader)).toBe(false);
+    expect(publishedGrade({ ...published, gradedAt: '2026-10-26T00:00:00Z' })).toBe(false);
     const history = { assignmentId: published.assignmentId, student, items: [{ version: 1, score: 0,
       feedback: null, status: 'PUBLISHED', source: 'AUTO_ZERO_NO_SUBMISSION', changedBy: student,
       changedAt: '2026-10-26T00:00:00Z' }] };

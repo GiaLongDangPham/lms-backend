@@ -17,6 +17,8 @@ describe('AssignmentRepository.studentAssignmentState', () => {
 
     expect(calls).toHaveLength(1);
     expect(calls[0]!.text).toContain('e.class_id=$3');
+    expect(calls[0]!.text).toContain('clock_timestamp()>a.deadline_at');
+    expect(calls[0]!.text).toContain('AS deadline_locked');
     expect(calls[0]!.values).toEqual(['assignment-id', 'student-id', 'class-id']);
   });
 });

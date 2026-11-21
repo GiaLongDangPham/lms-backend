@@ -23,6 +23,11 @@ export class NotificationRepository {
     [notificationId,recipientId])).rows[0];
   }
 
+  async countUnread(recipientId: string): Promise<number> {
+    return (await this.pool.query<{ count: number }>(`SELECT count(*)::int AS count FROM notifications
+      WHERE recipient_id=$1 AND read_at IS NULL`,[recipientId])).rows[0]!.count;
+  }
+
   async insertAssignmentCreated(db: NotificationDb, assignment: AssignmentCreatedEvent): Promise<number> {
     const result = await db.query(`INSERT INTO notifications
       (recipient_id,assignment_id,kind,title,body,deduplication_key)
@@ -60,8 +65,8 @@ export class NotificationRepository {
       JOIN assignments a ON a.deadline_at>dt.captured_at
         AND a.deadline_at<=dt.captured_at+interval '24 hours'
         AND a.results_published_at IS NULL
-      JOIN enrollments e ON e.class_id=a.class_id AND e.is_active
       JOIN classes c ON c.id=a.class_id
+      JOIN enrollments e ON e.class_id=a.class_id AND e.is_active
       JOIN users u ON u.id=e.student_id AND u.is_active
       WHERE NOT EXISTS(SELECT 1 FROM submissions s
         WHERE s.assignment_id=a.id AND s.enrollment_id=e.id)
