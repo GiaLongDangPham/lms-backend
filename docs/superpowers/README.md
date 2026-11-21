@@ -13,6 +13,8 @@ B3/B4 của thành viên khác giữ nguyên tên, vị trí và nội dung.
 | B6 · Comment | [B6-comment](specs/B6-comment.md) | [B6-comment](plans/B6-comment.md) | API + test local; cần Nam review, CI và staging/F6 |
 | Bug-06/08/09 · BE | [Thiết kế](specs/2026-11-21-bugs-06-08-09-be-design.md) | [Kế hoạch](plans/2026-11-21-bugs-06-08-09-be.md) | Capability nộp bài, gradedBy, notification context/unreadCount |
 
+| I2a · Tích hợp Thông báo | [Spec](specs/I2a-thong-bao.md) | [Plan/evidence](plans/I2a-thong-bao.md) | Local API/UI đạt; chưa deploy |
+
 ## Cách đọc và cập nhật
 
 - Đặt tên ngắn theo `<mã task>-<tên>.md`, ví dụ `S1-moi-truong.md`,

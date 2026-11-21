@@ -153,7 +153,7 @@ describe.skipIf(!target)('B5 student notifications', () => {
 
   it('atomically snapshots one assignment-created event for each active student', async () => {
     const created = await api.post(`/api/classes/${id.classA}/assignments`).auth(teacher,{type:'bearer'}).send({
-      title:'Bài tập thông báo',deadlineAt:'2026-11-20T10:00:00Z',maxScore:10,
+      title:'Bài tập thông báo',deadlineAt:'2030-11-20T10:00:00Z',maxScore:10,
     });
     expect(created.status).toBe(201);
 
@@ -161,9 +161,9 @@ describe.skipIf(!target)('B5 student notifications', () => {
       recipient_id,title,body,deduplication_key FROM notifications
       WHERE assignment_id=$1 AND kind='ASSIGNMENT_CREATED' ORDER BY recipient_id`,[created.body.id]);
     expect(rows.rows).toEqual([
-      { recipient_id:id.student1,title:'Bài tập mới',body:'Bài tập "Bài tập thông báo" của lớp "Lớp Demo A" có hạn nộp lúc 17:00 20/11/2026 (giờ Việt Nam).',
+      { recipient_id:id.student1,title:'Bài tập mới',body:'Bài tập "Bài tập thông báo" · Lớp Demo A. Hạn nộp: 20/11/2030 17:00 (giờ Việt Nam).',
         deduplication_key:`assignment-created:${created.body.id}` },
-      { recipient_id:id.student2,title:'Bài tập mới',body:'Bài tập "Bài tập thông báo" của lớp "Lớp Demo A" có hạn nộp lúc 17:00 20/11/2026 (giờ Việt Nam).',
+      { recipient_id:id.student2,title:'Bài tập mới',body:'Bài tập "Bài tập thông báo" · Lớp Demo A. Hạn nộp: 20/11/2030 17:00 (giờ Việt Nam).',
         deduplication_key:`assignment-created:${created.body.id}` },
     ]);
 
@@ -181,7 +181,7 @@ describe.skipIf(!target)('B5 student notifications', () => {
     await service.resultPublished(pool,{id:randomUUID(),assignmentId:created.body.id,revision:1},id.student1);
     const gradeBody=(await pool.query<{body:string}>(`SELECT body FROM notifications WHERE assignment_id=$1
       AND recipient_id=$2 AND kind='GRADE_PUBLISHED'`,[created.body.id,id.student1])).rows[0]!.body;
-    expect(gradeBody).toBe('Kết quả bài tập "Tiêu đề đã đổi" đã được cập nhật.');
+    expect(gradeBody).toBe('Kết quả bài tập "Tiêu đề đã đổi" · Lớp Demo A đã được cập nhật.');
     expect(gradeBody).not.toMatch(/10|điểm|nhận xét/i);
   });
 
@@ -242,9 +242,9 @@ describe.skipIf(!target)('B5 student notifications', () => {
     const reminderBody=(await pool.query<{body:string}>(`SELECT body FROM notifications WHERE assignment_id=$1
       AND kind='DEADLINE_REMINDER' LIMIT 1`,[inside.id])).rows[0]!.body;
     const deadlineInfo=(await pool.query<{title:string;value:string}>(`SELECT title,
-      to_char(deadline_at AT TIME ZONE 'Asia/Ho_Chi_Minh','HH24:MI DD/MM/YYYY') AS value
+      to_char(deadline_at AT TIME ZONE 'Asia/Ho_Chi_Minh','DD/MM/YYYY HH24:MI') AS value
       FROM assignments WHERE id=$1`,[inside.id])).rows[0]!;
-    expect(reminderBody).toBe(`Bài tập "${deadlineInfo.title}" của lớp "Lớp Demo A" sẽ hết hạn lúc ${deadlineInfo.value} (giờ Việt Nam).`);
+    expect(reminderBody).toBe(`Bài tập "${deadlineInfo.title}" · Lớp Demo A. Hạn nộp: ${deadlineInfo.value} (giờ Việt Nam).`);
     expect((await reminderRecipients(boundary.id)).map(row=>row.recipient_id)).toEqual([id.student1,id.student2]);
     for (const assignment of [outside,due,past,published]) {
       expect(await reminderRecipients(assignment.id)).toEqual([]);
