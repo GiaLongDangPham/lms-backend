@@ -114,7 +114,8 @@ export class AssignmentService {
         description: input.description ?? null, deadlineAt: input.deadlineAt,
         maxScore: input.maxScore, createdBy: principal.user.id });
       if (fileIds.length) await this.repository.replaceAssignmentFiles(db, row.id, fileIds);
-      await this.notifications.assignmentCreated(db, { id: row.id, classId: row.class_id, title: row.title });
+      await this.notifications.assignmentCreated(db, { id: row.id, classId: row.class_id,
+        title: row.title, deadlineAt: row.deadline_at });
       return this.assignmentDto(db, row, principal);
     });
   }

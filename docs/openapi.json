@@ -4111,7 +4111,8 @@
         "type": "object",
         "required": [
           "items",
-          "page"
+          "page",
+          "unreadCount"
         ],
         "properties": {
           "items": {
@@ -4122,6 +4123,12 @@
           },
           "page": {
             "$ref": "#/components/schemas/PageInfo"
+          },
+          "unreadCount": {
+            "type": "integer",
+            "minimum": 0,
+            "example": 3,
+            "description": "Total unread notifications for the caller across the whole inbox, independent of this page"
           }
         }
       },

@@ -72,6 +72,12 @@ describe('D2 OpenAPI contract', () => {
     expect(properties.lockedReason.enum).toEqual(['GRADED', 'DEADLINE_PASSED', null]);
     expect(properties.mySubmissionStatus.description).toContain('AUTO_ZERO_NO_SUBMISSION');
   });
+  it('documents the whole-inbox unread notification total', () => {
+    const spec = JSON.parse(readFileSync('docs/openapi.json', 'utf8'));
+    const schema = spec.components.schemas.NotificationPage;
+    expect(schema.required).toContain('unreadCount');
+    expect(schema.properties.unreadCount).toMatchObject({ type:'integer',minimum:0 });
+  });
   it('keeps Draft-only fields out of student grade/history and publication blockers', () => {
     const spec = JSON.parse(readFileSync('docs/openapi.json', 'utf8'));
     const ajv = new Ajv2020({ strict: false, allErrors: true });
