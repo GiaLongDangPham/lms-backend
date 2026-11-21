@@ -2758,7 +2758,7 @@
         }
       },
       "SubmissionLocked": {
-        "description": "A grade permanently locks submission, or the current deadline closes resubmission until a teacher extends it",
+        "description": "A grade or publication locks submission",
         "content": {
           "application/json": {
             "schema": {
@@ -2771,15 +2771,6 @@
                   "error": {
                     "code": "GRADE_LOCKS_SUBMISSION",
                     "message": "This assignment has already been graded and cannot be submitted again."
-                  }
-                }
-              },
-              "deadline": {
-                "summary": "Existing submission is past the current deadline",
-                "value": {
-                  "error": {
-                    "code": "DEADLINE_LOCKS_RESUBMISSION",
-                    "message": "The resubmission deadline has passed. A teacher must extend the deadline before another version can be submitted."
                   }
                 }
               }
@@ -3468,7 +3459,24 @@
               null
             ],
             "example": "SUBMITTED",
-            "description": "Present for students in assignment list responses; GRADED does not expose Draft score"
+            "description": "Present for students; GRADED includes AUTO_ZERO_NO_SUBMISSION and does not expose Draft score"
+          },
+          "canSubmit": {
+            "type": "boolean",
+            "example": false,
+            "description": "Present for students. False when grading or publication locks submission. Late versions are accepted before that lock."
+          },
+          "lockedReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "GRADED",
+              null
+            ],
+            "example": "GRADED",
+            "description": "Present for students and explains canSubmit=false without requiring a Submission resource"
           },
           "createdAt": {
             "$ref": "#/components/schemas/Timestamp"
@@ -3693,11 +3701,10 @@
             ],
             "enum": [
               "GRADED",
-              "DEADLINE_PASSED",
               null
             ],
             "example": "GRADED",
-            "description": "GRADED means a Draft or Published grade permanently locks submission without exposing its value. DEADLINE_PASSED means this existing submission can receive another version only after deadlineAt is extended."
+            "description": "GRADED means grading or publication locks submission without exposing a Draft grade."
           },
           "createdAt": {
             "$ref": "#/components/schemas/Timestamp"
@@ -3833,6 +3840,7 @@
           "score",
           "status",
           "source",
+          "gradedBy",
           "publishedBy",
           "publishedAt"
         ],
@@ -3880,14 +3888,6 @@
           "source": {
             "$ref": "#/components/schemas/GradeSource"
           },
-          "publishedBy": {
-            "$ref": "#/components/schemas/UserSummary"
-          },
-          "publishedAt": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-10-20T11:00:00Z"
-          },
           "gradedBy": {
             "anyOf": [
               {
@@ -3898,9 +3898,17 @@
               }
             ],
             "description": "Identity of the grader of this Published result only; null for automatic zero. Never exposes Draft grades or gradedAt."
+          },
+          "publishedBy": {
+            "$ref": "#/components/schemas/UserSummary"
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-10-20T11:00:00Z"
           }
         },
-        "description": "Student-safe result. AUTO_ZERO_NO_SUBMISSION has null submissionId and gradedVersionNumber."
+        "description": "Student-safe result. gradedBy identifies the grading actor independently of publishedBy. AUTO_ZERO_NO_SUBMISSION has null submissionId and gradedVersionNumber."
       },
       "Notification": {
         "type": "object",
@@ -4144,7 +4152,8 @@
         "type": "object",
         "required": [
           "items",
-          "page"
+          "page",
+          "unreadCount"
         ],
         "properties": {
           "items": {
@@ -4155,6 +4164,12 @@
           },
           "page": {
             "$ref": "#/components/schemas/PageInfo"
+          },
+          "unreadCount": {
+            "type": "integer",
+            "minimum": 0,
+            "example": 3,
+            "description": "Total unread notifications for the caller across the whole inbox, independent of this page"
           }
         }
       },

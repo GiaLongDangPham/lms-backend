@@ -142,11 +142,10 @@ export class AssessmentService {
       source: grade.source,
       publishedBy: grade.published_by ? await this.userSummary(db, grade.published_by) : null,
       publishedAt: grade.published_at?.toISOString() ?? null,
-      gradedBy: grade.source === 'AUTO_ZERO_NO_SUBMISSION' ? null : await this.userSummary(db, grade.graded_by),
+      gradedBy: publishedOnly && grade.source === 'AUTO_ZERO_NO_SUBMISSION' ? null : await this.userSummary(db, grade.graded_by),
     };
     if (publishedOnly) return data;
-    return { ...data, gradedBy: await this.userSummary(db, grade.graded_by),
-      gradedAt: grade.graded_at.toISOString() };
+    return { ...data, gradedBy: data.gradedBy!, gradedAt: grade.graded_at.toISOString() };
   }
 
   private async historyDto(db: Db, assignmentId: string, studentId: string,

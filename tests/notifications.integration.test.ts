@@ -75,6 +75,7 @@ describe.skipIf(!target)('B5 student notifications', () => {
     ]);
     expect(response.body.items.every((item:{id:string})=>item.id!==notificationIds.other)).toBe(true);
     expect(response.body.page.nextCursor).toBeNull();
+    expect(response.body.unreadCount).toBe(4);
   });
 
   it('paginates tied timestamps without duplicates and rejects malformed or cross-recipient cursors', async () => {
@@ -84,6 +85,7 @@ describe.skipIf(!target)('B5 student notifications', () => {
       notificationIds.newest,notificationIds.tiedHigh,
     ]);
     expect(first.body.page.nextCursor).toEqual(expect.any(String));
+    expect(first.body.unreadCount).toBe(4);
 
     const second = await api.get('/api/notifications')
       .query({limit:2,cursor:first.body.page.nextCursor}).auth(student1,{type:'bearer'});
@@ -92,6 +94,7 @@ describe.skipIf(!target)('B5 student notifications', () => {
       notificationIds.tiedLow,notificationIds.oldest,
     ]);
     expect(second.body.page.nextCursor).toBeNull();
+    expect(second.body.unreadCount).toBe(4);
 
     expect((await api.get('/api/notifications').query({cursor:'not-base64!'})
       .auth(student1,{type:'bearer'})).status).toBe(400);
@@ -137,6 +140,7 @@ describe.skipIf(!target)('B5 student notifications', () => {
       .auth(student1,{type:'bearer'});
     expect(repeated.status).toBe(200);
     expect(repeated.body.readAt).toBe(first.body.readAt);
+    expect((await api.get('/api/notifications').auth(student1,{type:'bearer'})).body.unreadCount).toBe(3);
 
     expect((await api.patch(`/api/notifications/${notificationIds.other}/read`)
       .auth(student1,{type:'bearer'})).status).toBe(404);
@@ -169,9 +173,16 @@ describe.skipIf(!target)('B5 student notifications', () => {
       AND kind='ASSIGNMENT_CREATED'`,[created.body.id])).rows.every(row=>row.body.includes('Bài tập thông báo'))).toBe(true);
 
     const service = new NotificationService(new NotificationRepository(pool));
-    expect(await service.assignmentCreated(pool,{id:created.body.id,classId:id.classA,title:'Bài tập thông báo'})).toBe(0);
+    expect(await service.assignmentCreated(pool,{id:created.body.id,classId:id.classA,title:'Bài tập thông báo',
+      deadlineAt:new Date('2026-11-20T10:00:00Z')})).toBe(0);
     expect((await pool.query(`SELECT 1 FROM notifications WHERE assignment_id=$1
       AND kind='ASSIGNMENT_CREATED'`,[created.body.id])).rowCount).toBe(2);
+
+    await service.resultPublished(pool,{id:randomUUID(),assignmentId:created.body.id,revision:1},id.student1);
+    const gradeBody=(await pool.query<{body:string}>(`SELECT body FROM notifications WHERE assignment_id=$1
+      AND recipient_id=$2 AND kind='GRADE_PUBLISHED'`,[created.body.id,id.student1])).rows[0]!.body;
+    expect(gradeBody).toBe('Kết quả bài tập "Tiêu đề đã đổi" · Lớp Demo A đã được cập nhật.');
+    expect(gradeBody).not.toMatch(/10|điểm|nhận xét/i);
   });
 
   it('skips inactive enrollments and inactive student accounts for assignment-created events', async () => {
@@ -228,6 +239,12 @@ describe.skipIf(!target)('B5 student notifications', () => {
     await service.dispatchDeadlineReminders();
 
     expect((await reminderRecipients(inside.id)).map(row=>row.recipient_id)).toEqual([id.student1,id.student2]);
+    const reminderBody=(await pool.query<{body:string}>(`SELECT body FROM notifications WHERE assignment_id=$1
+      AND kind='DEADLINE_REMINDER' LIMIT 1`,[inside.id])).rows[0]!.body;
+    const deadlineInfo=(await pool.query<{title:string;value:string}>(`SELECT title,
+      to_char(deadline_at AT TIME ZONE 'Asia/Ho_Chi_Minh','DD/MM/YYYY HH24:MI') AS value
+      FROM assignments WHERE id=$1`,[inside.id])).rows[0]!;
+    expect(reminderBody).toBe(`Bài tập "${deadlineInfo.title}" · Lớp Demo A. Hạn nộp: ${deadlineInfo.value} (giờ Việt Nam).`);
     expect((await reminderRecipients(boundary.id)).map(row=>row.recipient_id)).toEqual([id.student1,id.student2]);
     for (const assignment of [outside,due,past,published]) {
       expect(await reminderRecipients(assignment.id)).toEqual([]);

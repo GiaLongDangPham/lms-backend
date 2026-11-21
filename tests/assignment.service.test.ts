@@ -12,3 +12,42 @@ describe('isAfterDeadline', () => {
     expect(isAfterDeadline(new Date(at.getTime() - 1), at)).toBe(false);
   });
 });
+
+describe('studentAssignmentCapability', () => {
+  const capability = (assignmentService as Record<string, unknown>).studentAssignmentCapability as
+    ((state: { submitted_at: Date | null; deadline_at_submission: Date | null;
+      graded: boolean } | undefined, resultsPublished: boolean) => {
+        mySubmissionStatus: string; canSubmit: boolean; lockedReason: string | null;
+      }) | undefined;
+
+  it('locks an automatic zero without requiring a submission', () => {
+    expect(capability).toBeTypeOf('function');
+    if (!capability) return;
+    expect(capability({ submitted_at: null, deadline_at_submission: null,
+      graded: true },true)).toEqual({
+      mySubmissionStatus: 'GRADED', canSubmit: false, lockedReason: 'GRADED',
+    });
+  });
+
+  it('allows first and later submissions after the deadline if not graded or published', () => {
+    expect(capability).toBeTypeOf('function');
+    if (!capability) return;
+    expect(capability({ submitted_at: null, deadline_at_submission: null,
+      graded: false },false)).toEqual({
+      mySubmissionStatus: 'NOT_SUBMITTED', canSubmit: true, lockedReason: null,
+    });
+    expect(capability({ submitted_at: new Date('2026-11-19T10:00:00Z'),
+      deadline_at_submission: new Date('2026-11-19T09:00:00Z'),
+      graded: false },false)).toEqual({
+      mySubmissionStatus: 'LATE', canSubmit: true, lockedReason: null,
+    });
+  });
+
+  it('uses publication as a defensive grade lock even when legacy grade data is missing', () => {
+    expect(capability).toBeTypeOf('function');
+    if (!capability) return;
+    expect(capability(undefined,true)).toEqual({
+      mySubmissionStatus: 'NOT_SUBMITTED', canSubmit: false, lockedReason: 'GRADED',
+    });
+  });
+});

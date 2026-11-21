@@ -99,7 +99,7 @@ if (process.argv.includes('--self-test')) {
   assert.equal(submission.currentVersionNumber, 2);
   assert.equal(submission.canSubmit, false);
   assert.equal(submission.lockedReason, 'GRADED');
-  assert.ok(resolve(spec.components.schemas.Submission).properties.lockedReason.enum.includes('DEADLINE_PASSED'));
+  assert.deepEqual(resolve(spec.components.schemas.Submission).properties.lockedReason.enum, ['GRADED', null]);
   assert.equal(Object.hasOwn(submission, 'score'), false);
   const teacherSubmission = exampleFor(spec.components.schemas.TeacherSubmission);
   assert.ok(teacherSubmission.id);

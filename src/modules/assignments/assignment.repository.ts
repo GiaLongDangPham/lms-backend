@@ -122,9 +122,11 @@ export class AssignmentRepository {
   }
 
   async studentAssignmentState(db: Db, assignmentId: string, studentId: string, classId: string) {
-    return (await db.query<{ submitted_at: Date | null; deadline_at_submission: Date | null; graded: boolean }>(`SELECT
+    return (await db.query<{ submitted_at: Date | null; deadline_at_submission: Date | null;
+      graded: boolean }>(`SELECT
       v.submitted_at,v.deadline_at_submission,(g.id IS NOT NULL) AS graded
       FROM enrollments e
+      JOIN assignments a ON a.id=$1 AND a.class_id=e.class_id
       LEFT JOIN submissions s ON s.enrollment_id=e.id AND s.assignment_id=$1
       LEFT JOIN LATERAL (SELECT submitted_at,deadline_at_submission FROM submission_versions
         WHERE submission_id=s.id ORDER BY version_number DESC LIMIT 1) v ON true
