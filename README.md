@@ -150,6 +150,12 @@ Worker reminder chạy ngay khi API listen thành công và lặp mỗi 5 phút.
 `(0, 24h]`, eligibility và dedup theo deadline UTC dùng đồng hồ PostgreSQL; production
 phải duy trì ít nhất một API instance. SIGINT/SIGTERM dừng worker trước khi đóng pool.
 
+Handoff Bug-06/08/09: Assignment trả thêm `canSubmit`/`lockedReason` cho SV kể cả
+khi chưa có submission; auto-zero có `mySubmissionStatus: "GRADED"`. PublishedGrade
+trả riêng `gradedBy` và `publishedBy`. Notification mới snapshot tên lớp, tên bài và
+deadline giờ Việt Nam; NotificationPage trả tổng `unreadCount` toàn inbox. FE vẫn cần
+ẩn nút/dịch lỗi, đánh số lịch sử theo lần công bố và render badge menu.
+
 CI của D2 thất bại ở ESLint: thiếu khai báo Node globals trong file mock và một biến
 không dùng. Bản nhập vào B1 đã sửa bằng import Node rõ ràng và bỏ biến đó. Chưa push
 thay đổi lên nhánh D2 hoặc merge PR D2; kết quả trên GitHub của PR đó không tự thay đổi.

@@ -30,13 +30,17 @@ export class NotificationService implements NotificationPublisher {
     this.studentOnly(principal);
     const scope = `notifications:${principal.user.id}`;
     const cursor = decodeNotificationCursor(cursorValue, scope);
-    const rows = await this.repository.listForRecipient(principal.user.id, cursor, limit + 1);
+    const [rows,unreadCount] = await Promise.all([
+      this.repository.listForRecipient(principal.user.id,cursor,limit+1),
+      this.repository.countUnread(principal.user.id),
+    ]);
     const pageRows = rows.slice(0, limit);
     const last = pageRows.at(-1);
     return {
       items: pageRows.map(row => this.dto(row)),
       page: { nextCursor: rows.length > limit && last
         ? encodeNotificationCursor({ createdAt: last.cursor_created_at, id: last.id }, scope) : null },
+      unreadCount,
     };
   }
 

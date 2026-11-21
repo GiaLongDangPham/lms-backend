@@ -132,6 +132,21 @@ describe.skipIf(!target)('B4 assessment publication', () => {
 
   afterAll(async () => { await pool.end(); });
 
+  it('returns the grader separately from the teacher who publishes the result', async () => {
+    const assignmentId = await assignmentFixture();
+    const submission = await submit(assignmentId);
+    expect(submission.status).toBe(201);
+    expect((await saveGrade(submission.body.id,teacher2,{ gradedVersionNumber:1,score:8 })).status).toBe(200);
+    expect((await publish(assignmentId,teacher)).status).toBe(200);
+
+    const result = await api.get(`/api/assignments/${assignmentId}/my-result`)
+      .auth(student,{ type:'bearer' });
+    expect(result.status).toBe(200);
+    expect(result.body.gradedBy).toMatchObject({ id:id.teacher2,schoolCode:'GV002',role:'TEACHER' });
+    expect(result.body.publishedBy).toMatchObject({ id:id.teacher1,schoolCode:'GV001',role:'TEACHER' });
+    expect(result.body).not.toHaveProperty('gradedAt');
+  });
+
   it('rejects grading when the teacher assignment is removed while authorization waits', async () => {
     const assignmentId = await assignmentFixture();
     const submission = await submit(assignmentId);

@@ -35,12 +35,12 @@ export interface PublishedGrade {
   feedback: string | null;
   status: 'DRAFT' | 'PUBLISHED';
   source: 'MANUAL' | 'AUTO_ZERO_NO_SUBMISSION';
+  gradedBy: UserSummary;
   publishedBy: UserSummary | null;
   publishedAt: string | null;
 }
 
 export interface Grade extends PublishedGrade {
-  gradedBy: UserSummary;
   gradedAt: string;
 }
 
@@ -139,12 +139,12 @@ export class AssessmentService {
       feedback: grade.feedback,
       status: grade.status,
       source: grade.source,
+      gradedBy: await this.userSummary(db, grade.graded_by),
       publishedBy: grade.published_by ? await this.userSummary(db, grade.published_by) : null,
       publishedAt: grade.published_at?.toISOString() ?? null,
     };
     if (publishedOnly) return data;
-    return { ...data, gradedBy: await this.userSummary(db, grade.graded_by),
-      gradedAt: grade.graded_at.toISOString() };
+    return { ...data, gradedAt: grade.graded_at.toISOString() };
   }
 
   private async historyDto(db: Db, assignmentId: string, studentId: string,
