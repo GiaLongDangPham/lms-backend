@@ -3807,6 +3807,7 @@
           "score",
           "status",
           "source",
+          "gradedBy",
           "publishedBy",
           "publishedAt"
         ],
@@ -3854,6 +3855,9 @@
           "source": {
             "$ref": "#/components/schemas/GradeSource"
           },
+          "gradedBy": {
+            "$ref": "#/components/schemas/UserSummary"
+          },
           "publishedBy": {
             "$ref": "#/components/schemas/UserSummary"
           },
@@ -3863,7 +3867,7 @@
             "example": "2026-10-20T11:00:00Z"
           }
         },
-        "description": "Student-safe result. AUTO_ZERO_NO_SUBMISSION has null submissionId and gradedVersionNumber."
+        "description": "Student-safe result. gradedBy identifies the grading actor independently of publishedBy. AUTO_ZERO_NO_SUBMISSION has null submissionId and gradedVersionNumber."
       },
       "Notification": {
         "type": "object",

@@ -82,11 +82,18 @@ describe('D2 OpenAPI contract', () => {
     const publicationBlocked = ajv.compile({ $ref: 'contract#/components/schemas/AssignmentPublicationError' });
     const student = { id: '10000000-0000-4000-8000-000000000004', schoolCode: 'SV001',
       fullName: 'Student', role: 'STUDENT' };
+    const grader = { id: '10000000-0000-4000-8000-000000000002', schoolCode: 'GV002',
+      fullName: 'Grader', role: 'TEACHER' };
+    const publisher = { id: '10000000-0000-4000-8000-000000000001', schoolCode: 'GV001',
+      fullName: 'Publisher', role: 'TEACHER' };
     const published = { assignmentId: '50000000-0000-4000-8000-000000000001', student,
       submissionId: null, gradedVersionNumber: null, score: 0, feedback: null, status: 'PUBLISHED',
-      source: 'AUTO_ZERO_NO_SUBMISSION', publishedBy: student, publishedAt: '2026-10-26T00:00:00Z' };
+      source: 'AUTO_ZERO_NO_SUBMISSION', gradedBy: grader, publishedBy: publisher,
+      publishedAt: '2026-10-26T00:00:00Z' };
     expect(publishedGrade(published)).toBe(true);
-    expect(publishedGrade({ ...published, gradedBy: student, gradedAt: '2026-10-26T00:00:00Z' })).toBe(false);
+    const { gradedBy: _gradedBy, ...missingGrader } = published;
+    expect(publishedGrade(missingGrader)).toBe(false);
+    expect(publishedGrade({ ...published, gradedAt: '2026-10-26T00:00:00Z' })).toBe(false);
     const history = { assignmentId: published.assignmentId, student, items: [{ version: 1, score: 0,
       feedback: null, status: 'PUBLISHED', source: 'AUTO_ZERO_NO_SUBMISSION', changedBy: student,
       changedAt: '2026-10-26T00:00:00Z' }] };
