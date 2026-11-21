@@ -97,7 +97,8 @@ describe('D2 OpenAPI contract', () => {
       source: 'AUTO_ZERO_NO_SUBMISSION', gradedBy: grader, publishedBy: publisher,
       publishedAt: '2026-10-26T00:00:00Z' };
     expect(publishedGrade(published)).toBe(true);
-    const { gradedBy: _gradedBy, ...missingGrader } = published;
+    const missingGrader: Record<string,unknown> = { ...published };
+    delete missingGrader.gradedBy;
     expect(publishedGrade(missingGrader)).toBe(false);
     expect(publishedGrade({ ...published, gradedAt: '2026-10-26T00:00:00Z' })).toBe(false);
     const history = { assignmentId: published.assignmentId, student, items: [{ version: 1, score: 0,
