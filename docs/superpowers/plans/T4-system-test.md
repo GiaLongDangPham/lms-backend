@@ -43,7 +43,7 @@ scripts/integration-acceptance.mjs.
 - [x] Run backend/frontend check, full API, DB, contract/mock, compose config, browser acceptance.
 - [x] Separate final self-review of diff against spec/security and all QA issue mappings.
 - [x] Record actual counts, evidence and incomplete external gates; no fake QA closure.
-- [ ] Commit and push both T4 branches; verify remote SHAs and clean working trees.
+- [x] Commit and push both T4 branches; verify remote SHAs and clean working trees.
 
 ## Ledger
 
@@ -100,3 +100,14 @@ storage, deployed image behavior, external QA and independent review remain gate
 Branches are stacked `develop → I2a-tich-hop-thong-bao → I2b-tich-hop-comment →
 T4-system-test-regression` in both repos. Review/merge in that order; no develop merge
 is performed by this delivery.
+
+Delivery verified by `git ls-remote origin refs/heads/<branch>` against local heads:
+
+| Branch | Backend | Frontend |
+| --- | --- | --- |
+| I2a-tich-hop-thong-bao | c51f879 | f3e0334 |
+| I2b-tich-hop-comment | bf24fe2 | e05530f |
+| T4-system-test-regression (implementation) | 01c12b4 | 65f9b30 |
+
+Both working trees were clean after these pushes. This final evidence-only update
+is committed separately on T4; it does not change the implementation verified above.
