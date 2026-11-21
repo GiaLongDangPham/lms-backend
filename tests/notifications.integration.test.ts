@@ -190,7 +190,7 @@ describe.skipIf(!target)('B5 student notifications', () => {
     await pool.query('UPDATE users SET is_active=false WHERE id=$1',[id.student2]);
     try {
       const created = await api.post(`/api/classes/${id.classA}/assignments`).auth(teacher,{type:'bearer'}).send({
-        title:'Không có người nhận',deadlineAt:'2026-11-20T10:00:00Z',maxScore:10,
+        title:'Không có người nhận',deadlineAt:'2030-11-20T10:00:00Z',maxScore:10,
       });
       expect(created.status).toBe(201);
       expect((await pool.query(`SELECT 1 FROM notifications WHERE assignment_id=$1
@@ -212,7 +212,7 @@ describe.skipIf(!target)('B5 student notifications', () => {
       FOR EACH ROW EXECUTE FUNCTION b5_reject_assignment_notification()`);
     try {
       const response = await api.post(`/api/classes/${id.classA}/assignments`).auth(teacher,{type:'bearer'}).send({
-        title:'Rollback notification probe',deadlineAt:'2026-11-20T10:00:00Z',maxScore:10,fileIds:[fileId],
+        title:'Rollback notification probe',deadlineAt:'2030-11-20T10:00:00Z',maxScore:10,fileIds:[fileId],
       });
       expect(response.status).toBe(500);
       expect((await pool.query("SELECT 1 FROM assignments WHERE title='Rollback notification probe'")).rowCount).toBe(0);

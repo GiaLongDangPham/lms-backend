@@ -61,6 +61,11 @@ export interface UserSummaryRow {
 export class AssessmentRepository {
   constructor(private readonly pool: pg.Pool) {}
 
+  async listAssignmentGrades(db: Db, assignmentId: string, after: string | null, limit: number): Promise<GradeRow[]> {
+    return (await db.query<GradeRow>(`SELECT * FROM grades WHERE assignment_id=$1
+      AND ($2::uuid IS NULL OR id>$2) ORDER BY id LIMIT $3`, [assignmentId, after, limit])).rows;
+  }
+
   db(): pg.Pool { return this.pool; }
 
   async findAssignment(db: Db, assignmentId: string, lock = false) {

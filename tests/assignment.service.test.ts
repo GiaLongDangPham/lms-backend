@@ -16,7 +16,7 @@ describe('isAfterDeadline', () => {
 describe('studentAssignmentCapability', () => {
   const capability = (assignmentService as Record<string, unknown>).studentAssignmentCapability as
     ((state: { submitted_at: Date | null; deadline_at_submission: Date | null;
-      graded: boolean; deadline_locked: boolean } | undefined, resultsPublished: boolean) => {
+      graded: boolean } | undefined, resultsPublished: boolean) => {
         mySubmissionStatus: string; canSubmit: boolean; lockedReason: string | null;
       }) | undefined;
 
@@ -24,22 +24,22 @@ describe('studentAssignmentCapability', () => {
     expect(capability).toBeTypeOf('function');
     if (!capability) return;
     expect(capability({ submitted_at: null, deadline_at_submission: null,
-      graded: true, deadline_locked: false },true)).toEqual({
+      graded: true },true)).toEqual({
       mySubmissionStatus: 'GRADED', canSubmit: false, lockedReason: 'GRADED',
     });
   });
 
-  it('allows a first late submission but locks a later version after the deadline', () => {
+  it('allows first and later submissions after the deadline if not graded or published', () => {
     expect(capability).toBeTypeOf('function');
     if (!capability) return;
     expect(capability({ submitted_at: null, deadline_at_submission: null,
-      graded: false, deadline_locked: false },false)).toEqual({
+      graded: false },false)).toEqual({
       mySubmissionStatus: 'NOT_SUBMITTED', canSubmit: true, lockedReason: null,
     });
     expect(capability({ submitted_at: new Date('2026-11-19T10:00:00Z'),
       deadline_at_submission: new Date('2026-11-19T09:00:00Z'),
-      graded: false, deadline_locked: true },false)).toEqual({
-      mySubmissionStatus: 'LATE', canSubmit: false, lockedReason: 'DEADLINE_PASSED',
+      graded: false },false)).toEqual({
+      mySubmissionStatus: 'LATE', canSubmit: true, lockedReason: null,
     });
   });
 

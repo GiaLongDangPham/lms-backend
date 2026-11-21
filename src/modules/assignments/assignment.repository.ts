@@ -123,9 +123,8 @@ export class AssignmentRepository {
 
   async studentAssignmentState(db: Db, assignmentId: string, studentId: string, classId: string) {
     return (await db.query<{ submitted_at: Date | null; deadline_at_submission: Date | null;
-      graded: boolean; deadline_locked: boolean }>(`SELECT
-      v.submitted_at,v.deadline_at_submission,(g.id IS NOT NULL) AS graded,
-      (v.submitted_at IS NOT NULL AND clock_timestamp()>a.deadline_at) AS deadline_locked
+      graded: boolean }>(`SELECT
+      v.submitted_at,v.deadline_at_submission,(g.id IS NOT NULL) AS graded
       FROM enrollments e
       JOIN assignments a ON a.id=$1 AND a.class_id=e.class_id
       LEFT JOIN submissions s ON s.enrollment_id=e.id AND s.assignment_id=$1

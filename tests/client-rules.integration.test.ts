@@ -86,19 +86,19 @@ describe.skipIf(!target)('B1/B3 client rules and assignments/submissions',()=>{
     const other=await api.get('/api/submissions/'+first.body.id).auth(student2,{type:'bearer'});expect(other.status).toBe(404);
     expect((await api.get('/api/submissions/'+first.body.id).auth(admin,{type:'bearer'})).status).toBe(403);
   });
-  it('allows a late first submission, locks another version, and reopens after deadline extension',async()=>{
+  it('allows late first and subsequent versions and preserves history after extension',async()=>{
     const a=await assignment();await pool.query("UPDATE assignments SET deadline_at=now()-interval '1 hour' WHERE id=$1",[a]);
     const before=await api.get(`/api/assignments/${a}`).auth(student,{type:'bearer'});
     expect(before.body).toMatchObject({mySubmissionStatus:'NOT_SUBMITTED',canSubmit:true,lockedReason:null});
     const first=await submit(a);expect(first.status).toBe(201);expect(first.body.versions[0].isLate).toBe(true);
     const after=await api.get(`/api/assignments/${a}`).auth(student,{type:'bearer'});
-    expect(after.body).toMatchObject({mySubmissionStatus:'LATE',canSubmit:false,lockedReason:'DEADLINE_PASSED'});
-    const blocked=await submit(a);expect(blocked.status).toBe(409);
-    expect(blocked.body.error.code).toBe('DEADLINE_LOCKS_RESUBMISSION');
+    expect(after.body).toMatchObject({mySubmissionStatus:'LATE',canSubmit:true,lockedReason:null});
+    const lateAgain=await submit(a);expect(lateAgain.status).toBe(201);
+    expect(lateAgain.body.versions[1].isLate).toBe(true);
     const extended=await api.patch(`/api/assignments/${a}`).auth(teacher,{type:'bearer'})
       .send({deadlineAt:new Date(Date.now()+3_600_000).toISOString()});
     expect(extended.status).toBe(200);
-    const reopened=await submit(a);expect(reopened.status).toBe(201);expect(reopened.body.versions).toHaveLength(2);
+    const reopened=await submit(a);expect(reopened.status).toBe(201);expect(reopened.body.versions).toHaveLength(3);
     expect(reopened.body.versions[0].isLate).toBe(true);
   });
   it('creates assignments with aggregate list fields and rejects excessive precision',async()=>{

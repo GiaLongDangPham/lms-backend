@@ -54,7 +54,7 @@ The mock returns deterministic schema examples for success and declared errors. 
 
 ## Approved submission, deadline, score and file rules — 24/10/2026
 
-1. A first submission may be late. After a student has a submission, another version is accepted only when its successful server-side commit time is at or before the assignment's current deadline. After that boundary the API returns `409 DEADLINE_LOCKS_RESUBMISSION`; extending the deadline into the future reopens resubmission for an ungraded student.
+1. Q2 confirmed by Kha 19/11: first and subsequent submissions are accepted after deadline as Late until grading/publication. Each version preserves its submission time and deadline snapshot. Any Draft/Published grade or assignment publication locks further submissions.
 2. A teacher may move the deadline earlier or later after submissions exist. This changes only future admission checks; every existing version keeps its `deadlineAtSubmission` and historical Late result.
 3. Scores and `maxScore` allow at most two decimal places and remain constrained by `0 <= score <= maxScore`.
 4. Publication remains assignment-wide and atomic, matching the UI and R1 scenario.

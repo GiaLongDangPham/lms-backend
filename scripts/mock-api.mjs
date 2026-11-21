@@ -99,7 +99,7 @@ if (process.argv.includes('--self-test')) {
   assert.equal(submission.currentVersionNumber, 2);
   assert.equal(submission.canSubmit, false);
   assert.equal(submission.lockedReason, 'GRADED');
-  assert.ok(resolve(spec.components.schemas.Submission).properties.lockedReason.enum.includes('DEADLINE_PASSED'));
+  assert.deepEqual(resolve(spec.components.schemas.Submission).properties.lockedReason.enum, ['GRADED', null]);
   assert.equal(Object.hasOwn(submission, 'score'), false);
   const teacherSubmission = exampleFor(spec.components.schemas.TeacherSubmission);
   assert.ok(teacherSubmission.id);
@@ -117,8 +117,8 @@ if (process.argv.includes('--self-test')) {
   assert.equal(comment.assignmentId, null);
   assert.ok(comment.submissionId);
   assert.ok(spec.paths['/assignments/{assignmentId}/submissions'].post.responses['409']);
-  assert.match(spec.paths['/assignments/{assignmentId}/submissions'].post.description, /DEADLINE_LOCKS_RESUBMISSION/);
-  assert.match(spec.paths['/assignments/{assignmentId}'].patch.description, /reopens resubmission/);
+  assert.match(spec.paths['/assignments/{assignmentId}/submissions'].post.description, /late resubmission/);
+  assert.match(spec.paths['/assignments/{assignmentId}'].patch.description, /Late resubmission/);
   assert.equal(resolve(spec.components.schemas.SaveDraftGradeRequest).properties.score.multipleOf, 0.01);
   assert.ok(spec.paths['/files'].post['x-allowed-extensions'].includes('cpp'));
   assert.ok(spec.paths['/files'].post['x-allowed-extensions'].includes('py'));
@@ -155,7 +155,7 @@ if (process.argv.includes('--self-test')) {
   assert.equal(discovery.status, 200);
   assert.equal(JSON.parse(discovery.body).openapi, '/api/openapi.json');
   assert.equal(send('GET', '/api/missing').status, 404);
-  console.log('Mock self-test passed: discovery, HTTP dispatch, grade/deadline submission locks, deadline reopening, two-decimal scores, file allowlist, Draft separation, assignment-wide publication, automatic-zero summary, publication blocker and comment target.');
+  console.log('Mock self-test passed: discovery, HTTP dispatch, grade submission locks, Q2 late resubmission, two-decimal scores, file allowlist, Draft separation, assignment-wide publication, automatic-zero summary, publication blocker and comment target.');
   process.exit(0);
 }
 

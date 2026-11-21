@@ -3,7 +3,7 @@
   "info": {
     "title": "LMS Nhóm 2 API",
     "version": "0.4.0-integration-draft",
-    "description": "D2 review draft for CP1. Paths are relative to /api. x-roles names permitted actors; every resource operation also requires class membership or ownership checks. Client Log #18–#20 rules are approved: grading locks further submissions, grades may be corrected with complete history, and publishing is atomic for the whole assignment with automatic zeroes for active students who did not submit. Creating or reactivating an enrollment for an assignment already published atomically creates any missing Published zero result while preserving existing grades/history and without fabricating a submission; submission access stays locked. Assignment-wide publisher provenance is database-only. Resubmission closes at the current deadline and reopens only when a teacher extends that deadline; a first submission may still be late. Submission time is the server-side successful atomic commit time. Scores use at most two decimal places. Rules still marked x-decision-pending are not approved. The mock returns examples only and does not enforce security or persist data."
+    "description": "D2 review draft for CP1. Paths are relative to /api. x-roles names permitted actors; every resource operation also requires class membership or ownership checks. Client Log #18–#20 rules are approved: grading locks further submissions, grades may be corrected with complete history, and publishing is atomic for the whole assignment with automatic zeroes for active students who did not submit. Creating or reactivating an enrollment for an assignment already published atomically creates any missing Published zero result while preserving existing grades/history and without fabricating a submission; submission access stays locked. Assignment-wide publisher provenance is database-only. Q2 confirmed 19/11: first and subsequent submissions may be late while no grade or publication exists; every version preserves its deadline snapshot. Submission time is the server-side successful atomic commit time. Scores use at most two decimal places. Rules still marked x-decision-pending are not approved. The mock returns examples only and does not enforce security or persist data."
   },
   "servers": [
     {
@@ -965,7 +965,8 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           }
-        }
+        },
+        "description": "Create assignment only with deadlineAt strictly after the PostgreSQL server time; otherwise 400 VALIDATION_ERROR."
       }
     },
     "/assignments/{assignmentId}": {
@@ -1005,7 +1006,7 @@
         ],
         "operationId": "updateAssignment",
         "summary": "Edit assignment details, including its deadline after submissions exist",
-        "description": "An assigned teacher may move deadlineAt earlier or later even after submissions exist. Existing versions retain deadlineAtSubmission and historical isLate. Extending deadlineAt into the future reopens resubmission for ungraded students until the new deadline; it never unlocks a student whose Draft or Published grade already exists.",
+        "description": "Assigned teachers may update the deadline. Every submission version keeps its immutable deadline snapshot. Late resubmission is allowed until grading or publication; extending a deadline does not unlock graded work.",
         "x-roles": [
           "TEACHER"
         ],
@@ -1081,7 +1082,7 @@
         ],
         "operationId": "submitAssignment",
         "summary": "Atomically create an immutable submission version within the applicable submission rule",
-        "description": "A first submission is accepted even after deadlineAt and is marked Late. After a student has submitted, another version is accepted only when the server-side successful commit time is at or before the assignment's current deadlineAt; extending deadlineAt can therefore reopen resubmission. The server returns 409 DEADLINE_LOCKS_RESUBMISSION after that boundary. Any Draft or Published grade takes precedence and permanently returns 409 GRADE_LOCKS_SUBMISSION. A version contains at most 10 distinct files and 100 MiB total. All files must be PENDING, owned by the actor and unattached; the version, file links and transition to ATTACHED commit atomically. A failed commit creates no version. submittedAt is the server completion time of that successful commit and deadlineAtSubmission snapshots the current deadline used for the check.",
+        "description": "Accept first submissions and late resubmission while no grade or assignment publication exists. Versions after the current deadline are Late. Preserve immutable history and deadline snapshots; validate and attach owned files atomically. Any grade (Draft or Published) or publication returns 409 GRADE_LOCKS_SUBMISSION.",
         "x-roles": [
           "STUDENT"
         ],
@@ -2022,6 +2023,53 @@
           }
         }
       }
+    },
+    "/assignments/{assignmentId}/grades": {
+      "get": {
+        "tags": [
+          "Grades"
+        ],
+        "operationId": "listAssignmentGrades",
+        "summary": "List teacher-only assignment grades including results without submissions",
+        "x-roles": [
+          "TEACHER"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AssignmentId"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paged grades for assigned teachers only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GradePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2710,7 +2758,7 @@
         }
       },
       "SubmissionLocked": {
-        "description": "A grade permanently locks submission, or the current deadline closes resubmission until a teacher extends it",
+        "description": "A grade or publication locks submission",
         "content": {
           "application/json": {
             "schema": {
@@ -2723,15 +2771,6 @@
                   "error": {
                     "code": "GRADE_LOCKS_SUBMISSION",
                     "message": "This assignment has already been graded and cannot be submitted again."
-                  }
-                }
-              },
-              "deadline": {
-                "summary": "Existing submission is past the current deadline",
-                "value": {
-                  "error": {
-                    "code": "DEADLINE_LOCKS_RESUBMISSION",
-                    "message": "The resubmission deadline has passed. A teacher must extend the deadline before another version can be submitted."
                   }
                 }
               }
@@ -3425,7 +3464,7 @@
           "canSubmit": {
             "type": "boolean",
             "example": false,
-            "description": "Present for students. False when a grade/publication or an expired resubmission window locks submission. A first submission may still be late."
+            "description": "Present for students. False when grading or publication locks submission. Late versions are accepted before that lock."
           },
           "lockedReason": {
             "type": [
@@ -3434,7 +3473,6 @@
             ],
             "enum": [
               "GRADED",
-              "DEADLINE_PASSED",
               null
             ],
             "example": "GRADED",
@@ -3663,11 +3701,10 @@
             ],
             "enum": [
               "GRADED",
-              "DEADLINE_PASSED",
               null
             ],
             "example": "GRADED",
-            "description": "GRADED means a Draft or Published grade permanently locks submission without exposing its value. DEADLINE_PASSED means this existing submission can receive another version only after deadlineAt is extended."
+            "description": "GRADED means grading or publication locks submission without exposing a Draft grade."
           },
           "createdAt": {
             "$ref": "#/components/schemas/Timestamp"
@@ -3852,7 +3889,15 @@
             "$ref": "#/components/schemas/GradeSource"
           },
           "gradedBy": {
-            "$ref": "#/components/schemas/UserSummary"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Identity of the grader of this Published result only; null for automatic zero. Never exposes Draft grades or gradedAt."
           },
           "publishedBy": {
             "$ref": "#/components/schemas/UserSummary"
@@ -4664,6 +4709,25 @@
             "$ref": "#/components/schemas/PageInfo"
           }
         }
+      },
+      "GradePage": {
+        "type": "object",
+        "required": [
+          "items",
+          "page"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Grade"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
+          }
+        },
+        "additionalProperties": false
       }
     }
   }

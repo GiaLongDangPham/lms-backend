@@ -27,7 +27,7 @@ describe('D2 OpenAPI contract', () => {
       Object.values(path).filter((operation): operation is { operationId: string; description?: string } =>
         typeof operation.operationId === 'string'),
     );
-    expect(operations).toHaveLength(48);
+    expect(operations).toHaveLength(49);
     const descriptions = Object.fromEntries(
       operations.map(({ operationId, description }) => [operationId, description ?? '']),
     );
@@ -69,7 +69,7 @@ describe('D2 OpenAPI contract', () => {
     const spec = JSON.parse(readFileSync('docs/openapi.json', 'utf8'));
     const properties = spec.components.schemas.Assignment.properties;
     expect(properties.canSubmit).toMatchObject({ type: 'boolean' });
-    expect(properties.lockedReason.enum).toEqual(['GRADED', 'DEADLINE_PASSED', null]);
+    expect(properties.lockedReason.enum).toEqual(['GRADED', null]);
     expect(properties.mySubmissionStatus.description).toContain('AUTO_ZERO_NO_SUBMISSION');
   });
   it('documents the whole-inbox unread notification total', () => {
@@ -97,6 +97,7 @@ describe('D2 OpenAPI contract', () => {
       source: 'AUTO_ZERO_NO_SUBMISSION', gradedBy: grader, publishedBy: publisher,
       publishedAt: '2026-10-26T00:00:00Z' };
     expect(publishedGrade(published)).toBe(true);
+    expect(publishedGrade({ ...published, gradedBy: null })).toBe(true);
     const missingGrader: Record<string,unknown> = { ...published };
     delete missingGrader.gradedBy;
     expect(publishedGrade(missingGrader)).toBe(false);
