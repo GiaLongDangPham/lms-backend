@@ -15,6 +15,8 @@ B3/B4 của thành viên khác giữ nguyên tên, vị trí và nội dung.
 
 | I2a · Tích hợp Thông báo | [Spec](specs/I2a-thong-bao.md) | [Plan/evidence](plans/I2a-thong-bao.md) | Local API/UI đạt; chưa deploy |
 
+| I2b · Tích hợp Comment | [Spec](specs/I2b-comment.md) | [Plan/evidence](plans/I2b-comment.md) | Local UI/API đạt; deploy package sẵn, chưa deploy |
+
 ## Cách đọc và cập nhật
 
 - Đặt tên ngắn theo `<mã task>-<tên>.md`, ví dụ `S1-moi-truong.md`,

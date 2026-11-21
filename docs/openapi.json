@@ -1420,9 +1420,7 @@
             "$ref": "#/components/responses/NotFound"
           }
         },
-        "x-decision-pending": [
-          "Q09: final visibility policy for submission/result discussion"
-        ]
+        "description": "Private submission discussion: assigned class teachers and the actively enrolled submission owner only; other students cannot read or write. The F6 MVP UI uses shared assignment discussion."
       },
       "post": {
         "tags": [
@@ -1459,9 +1457,7 @@
             "$ref": "#/components/responses/NotFound"
           }
         },
-        "x-decision-pending": [
-          "Q09: final visibility policy for submission/result discussion"
-        ]
+        "description": "Private submission discussion: assigned class teachers and the actively enrolled submission owner only; other students cannot read or write. The F6 MVP UI uses shared assignment discussion."
       }
     },
     "/auth/refresh": {
@@ -4593,7 +4589,7 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                    "additionalProperties": false,
+                  "additionalProperties": false,
                   "required": [
                     "submissionId",
                     "student"
