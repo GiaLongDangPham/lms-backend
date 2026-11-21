@@ -18,6 +18,11 @@ CI hoặc nghiệm thu staging/F6.
 
 ## Chạy local
 
+Cập nhật I2a/I2b/T4 (21/11/2026): đã tích hợp thông báo, thảo luận chung và sửa
+regression QA trên local. [Spec/plan từng task](docs/superpowers/README.md) có evidence
+và giới hạn nghiệm thu. [Gói triển khai](deploy/README.md) đã chuẩn bị; nhóm chưa
+deploy, chưa nghiệm thu staging và chưa xác nhận CI/review độc lập.
+
 Yêu cầu: Node.js 22 (tối thiểu 22.13), npm, Git. PostgreSQL 17 qua Docker Desktop
 (Linux containers) hoặc một PostgreSQL local có sẵn. Dùng cùng dòng Node 22 với frontend/CI.
 
@@ -91,7 +96,7 @@ Xem [hướng dẫn migration/seed](database/migrations/README.md).
 Nguồn duy nhất: [docs/openapi.json](docs/openapi.json), lấy từ nhánh
 `docs/api-specification`, commit `532f9832d6384b95cca4504d36cfae4bff2a5390`.
 Giữ các phần mở rộng JWT/mật khẩu của B1, hợp nhất thay đổi nghiệp vụ D2 mới nhất
-và thêm API sửa điểm không có bài nộp: tổng 48 operation trong contract.
+và thêm API sửa điểm không có bài nộp cùng aggregate bảng điểm GV: tổng 49 operation.
 API thật hiện có B1, B3 assignment/submission và các route chấm/công bố/lịch sử;
 ghi danh mới hoặc kích hoạt lại sau công bố cũng tạo kết quả 0 Published còn thiếu
 trong cùng transaction. API không trả thông tin người công bố toàn bài.
@@ -199,14 +204,17 @@ Repo hiện chỉ có workflow CI, chưa có cấu hình hoặc URL deploy stagi
   PENDING, thuộc người gọi và chưa gắn tài nguyên; chưa có upload S3 thật.
 - GV được tạo/sửa/xem/liệt kê bài tập; SV/GV xem danh sách theo lớp. Response danh
   sách có số đã nộp/sĩ số cho GV và trạng thái bài của chính SV.
-- Lần nộp đầu sau deadline vẫn được nhận và đánh Late. Version tiếp theo chỉ được
-  nhận đến deadline hiện tại; gia hạn mở lại nếu chưa có Grade. Version, file links,
+- Q2 chốt 19/11: các lần nộp sau deadline vẫn được nhận và đánh Late khi chưa có
+  Grade/công bố kết quả. Deadline tạo bài phải ở tương lai. Version, file links,
   deadline snapshot và PENDING → ATTACHED commit trong cùng transaction.
 - Có grade Draft hoặc Published thì khóa nộp lại (`409 GRADE_LOCKS_SUBMISSION`).
   GET `my-submission` trả `canSubmit`, `lockedReason`; không chứa điểm/feedback Draft.
 - GV dùng GET/PUT `/submissions/{submissionId}/grade`. Lần chấm đầu dùng version
   mới nhất; sửa grade dùng version ghi trong grade. Dữ liệu cũ từng chấm v1 rồi
   nộp v2 vẫn giữ v1, sửa/công bố được mà không viết lại lịch sử.
+- GV được phân công dùng GET `/assignments/{assignmentId}/grades` (cursor/limit)
+  để lấy bảng điểm, gồm kết quả 0 của SV chưa nộp; SV/ADMIN bị từ chối. Kết quả
+  Published có `gradedBy` (null cho 0 tự động), không công khai `gradedAt` hay Draft.
 - POST `/assignments/{assignmentId}/grades/publish` công bố cả bài trong transaction.
   Có bài đã nộp chưa chấm thì trả `409 UNGRADED_SUBMISSIONS` kèm danh sách chặn,
   không công bố một phần. Thành công: SV/tài khoản active chưa nộp được 0, source

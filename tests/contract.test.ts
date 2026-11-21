@@ -27,7 +27,7 @@ describe('D2 OpenAPI contract', () => {
       Object.values(path).filter((operation): operation is { operationId: string; description?: string } =>
         typeof operation.operationId === 'string'),
     );
-    expect(operations).toHaveLength(48);
+    expect(operations).toHaveLength(49);
     const descriptions = Object.fromEntries(
       operations.map(({ operationId, description }) => [operationId, description ?? '']),
     );

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type pg from 'pg';
 import { z } from 'zod';
 import { createAuth, getPrincipal, requireChangedPassword, type AuthConfig } from '../b1/auth.js';
-import { parse, uuid } from '../b1/common.js';
+import { cursorId, paging, parse, uuid } from '../b1/common.js';
 import { AssessmentController } from './assessment.controller.js';
 import type { AssessmentService } from './service.js';
 
@@ -30,6 +30,13 @@ export function createAssessmentRouter(pool: pg.Pool, config: AuthConfig, servic
   router.get('/submissions/:submissionId/grade', async (request, response) => {
     await controller.getSubmissionGrade(response, getPrincipal(request),
       parse(uuid, request.params.submissionId));
+  });
+  router.get('/assignments/:assignmentId/grades', async (request, response) => {
+    const assignmentId = parse(uuid, request.params.assignmentId);
+    const query = parse(paging.strict(), request.query);
+    const scope = `grades:${assignmentId}`;
+    response.json(await service.listAssignmentGrades(getPrincipal(request), assignmentId,
+      cursorId(query.cursor, scope), query.limit, scope));
   });
   router.put('/submissions/:submissionId/grade', async (request, response) => {
     await controller.saveSubmissionGrade(response, getPrincipal(request),

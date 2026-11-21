@@ -40,6 +40,7 @@ finally {
 const selected = process.argv.includes('--enrollment-publication')
   ? ['tests/enrollment-publication.integration.test.ts']
   : process.argv.includes('--comments') ? ['tests/comments.integration.test.ts']
+  : process.argv.includes('--t4') ? ['tests/t4-regression.integration.test.ts']
   : process.argv.includes('--assessment-publication') ? ['tests/assessment-publication.integration.test.ts']
   : process.argv.includes('--notifications') ? ['tests/notifications.integration.test.ts']
   : process.argv.includes('--materials') ? ['tests/materials.integration.test.ts']
@@ -48,7 +49,7 @@ const selected = process.argv.includes('--enrollment-publication')
     : ['tests/b1.integration.test.ts', 'tests/client-rules.integration.test.ts',
       'tests/assignments.integration.test.ts', 'tests/enrollment-publication.integration.test.ts',
       'tests/assessment-publication.integration.test.ts', 'tests/materials.integration.test.ts',
-      'tests/notifications.integration.test.ts', 'tests/comments.integration.test.ts'];
+      'tests/notifications.integration.test.ts', 'tests/comments.integration.test.ts', 'tests/t4-regression.integration.test.ts'];
 for (const file of selected) {
   await runFile(file);
 }

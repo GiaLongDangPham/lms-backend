@@ -90,6 +90,9 @@ export class AssignmentService {
     this.teacher(principal);
     return transaction(this.repository.db(), async db => {
       await requireClassAccess(db, principal, classId, true);
+      if (input.deadlineAt.getTime() <= (await this.repository.serverTime(db)).getTime()) {
+        throw new ApiError(400, 'VALIDATION_ERROR', 'Deadline must be in the future when creating an assignment.');
+      }
       const fileIds = input.fileIds ?? [];
       await this.validatePendingFiles(db, fileIds, principal.user.id);
       const row = await this.repository.createAssignment(db, { classId, title: input.title,
@@ -129,8 +132,6 @@ export class AssignmentService {
     const versions = await this.repository.submissionVersions(db, submissionId);
     const files = await this.repository.submissionFiles(db, submissionId);
     const grade = await this.repository.gradeSummary(db, submissionId);
-    const deadlineLocked = versions.length > 0 &&
-      isAfterDeadline(await this.repository.serverTime(db), assignment.deadline_at);
     const user = await this.repository.userSummary(db, submission.student_id);
     const dto: Record<string, unknown> = {
       id: submission.id, assignmentId: submission.assignment_id,
@@ -141,8 +142,8 @@ export class AssignmentService {
         deadlineAtSubmission: version.deadline_at_submission.toISOString(),
         isLate: isAfterDeadline(version.submitted_at, version.deadline_at_submission),
         files: files.filter(file => file.version_number === version.version_number).map(file => this.fileDto(file)) })),
-      canSubmit: !grade && !assignment.results_published_at && !deadlineLocked,
-      lockedReason: grade || assignment.results_published_at ? 'GRADED' : deadlineLocked ? 'DEADLINE_PASSED' : null,
+      canSubmit: !grade && !assignment.results_published_at,
+      lockedReason: grade || assignment.results_published_at ? 'GRADED' : null,
       createdAt: submission.created_at.toISOString(),
     };
     if (includeGrade) dto.grade = grade ? { status: grade.status, source: grade.source,
@@ -173,9 +174,6 @@ export class AssignmentService {
       const total = files.reduce((sum, file) => sum + Number(file.size_bytes), 0);
       if (total > 100 * MiB) throw new ApiError(413, 'PAYLOAD_TOO_LARGE', 'Submission files exceed 100 MiB.');
       const submittedAt = await this.repository.serverTime(db);
-      if (existing && isAfterDeadline(submittedAt, assignment.deadline_at)) {
-        throw new ApiError(409, 'DEADLINE_LOCKS_RESUBMISSION', 'Extend the deadline before submitting a new version.');
-      }
       const id = existing?.id ?? await this.repository.ensureSubmission(db, assignmentId, enrollment.id);
       const version = await this.repository.nextVersion(db, id);
       await this.repository.insertVersion(db, { submissionId: id, version, submittedAt,

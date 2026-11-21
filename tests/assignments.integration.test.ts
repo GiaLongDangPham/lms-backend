@@ -125,14 +125,15 @@ describe.skipIf(!target)('assignment and submission boundaries', () => {
     expect(first.status).toBe(201);
     expect(first.body.versions[0].isLate).toBe(true);
     const oldSnapshot = first.body.versions[0].deadlineAtSubmission;
-    expect((await submit(assignmentId, student, [await pendingFile()])).body.error.code).toBe('DEADLINE_LOCKS_RESUBMISSION');
+    const lateAgain = await submit(assignmentId, student, [await pendingFile()]);
+    expect(lateAgain.status).toBe(201); expect(lateAgain.body.versions[1].isLate).toBe(true);
     const deadlineAt = new Date(Date.now() + 60_000).toISOString();
     expect((await api.patch(`/api/assignments/${assignmentId}`).auth(teacher, { type: 'bearer' })
       .send({ deadlineAt })).status).toBe(200);
     const reopened = await submit(assignmentId, student, [await pendingFile()]);
     expect(reopened.status).toBe(201);
     expect(reopened.body.versions.map((version: { deadlineAtSubmission: string }) => version.deadlineAtSubmission))
-      .toEqual([oldSnapshot, deadlineAt]);
+      .toEqual([oldSnapshot, oldSnapshot, deadlineAt]);
   });
 
   it('locks Draft, Published, and assignment-wide publication without exposing Draft grade data', async () => {

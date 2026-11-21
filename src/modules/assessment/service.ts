@@ -1,5 +1,5 @@
 import type { Principal } from '../b1/auth.js';
-import { ApiError, transaction } from '../b1/common.js';
+import { ApiError, page, transaction } from '../b1/common.js';
 import { AssessmentRepository, type Db, type GradeRow } from './assessment.repository.js';
 import type { NotificationPublisher } from '../notifications/notification.types.js';
 
@@ -37,6 +37,7 @@ export interface PublishedGrade {
   source: 'MANUAL' | 'AUTO_ZERO_NO_SUBMISSION';
   publishedBy: UserSummary | null;
   publishedAt: string | null;
+  gradedBy: UserSummary | null;
 }
 
 export interface Grade extends PublishedGrade {
@@ -141,6 +142,7 @@ export class AssessmentService {
       source: grade.source,
       publishedBy: grade.published_by ? await this.userSummary(db, grade.published_by) : null,
       publishedAt: grade.published_at?.toISOString() ?? null,
+      gradedBy: grade.source === 'AUTO_ZERO_NO_SUBMISSION' ? null : await this.userSummary(db, grade.graded_by),
     };
     if (publishedOnly) return data;
     return { ...data, gradedBy: await this.userSummary(db, grade.graded_by),
@@ -175,6 +177,14 @@ export class AssessmentService {
     const grade = await this.repository.findGradeBySubmission(this.repository.db(), submissionId);
     if (!grade) throw new ApiError(404, 'NOT_FOUND', 'No grade exists.');
     return this.gradeDto(this.repository.db(), grade);
+  }
+
+  async listAssignmentGrades(principal: Principal, assignmentId: string, after: string | null, limit: number, scope: string) {
+    this.teacherOnly(principal);
+    await this.assignmentAccess(this.repository.db(), principal, assignmentId);
+    const rows = await this.repository.listAssignmentGrades(this.repository.db(), assignmentId, after, limit + 1);
+    const result = page(rows, limit, scope, row => row);
+    return { items: await Promise.all(rows.slice(0, limit).map(row => this.gradeDto(this.repository.db(), row))), page: result.page };
   }
 
   async saveSubmissionGrade(principal: Principal, submissionId: string,
