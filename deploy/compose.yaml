@@ -1,0 +1,76 @@
+name: lms-staging
+x-api-env: &api-env
+  DATABASE_URL: postgresql://lms:${POSTGRES_PASSWORD:?required}@postgres:5432/lms
+  DATABASE_SSL: 'false'
+  JWT_SECRET: ${JWT_SECRET:?required}
+  JWT_ISSUER: lms-backend
+  JWT_AUDIENCE: lms-frontend
+  CORS_ORIGINS: ${PUBLIC_ORIGIN:?required}
+  AUTH_TRUSTED_ORIGINS: ${PUBLIC_ORIGIN:?required}
+  REFRESH_COOKIE_SECURE: 'true'
+  REFRESH_COOKIE_SAME_SITE: lax
+  S3_BUCKET: lms-private
+  S3_ENDPOINT: http://storage:9000
+  S3_FORCE_PATH_STYLE: 'true'
+  AWS_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: ${STORAGE_USER:?required}
+  AWS_SECRET_ACCESS_KEY: ${STORAGE_PASSWORD:?required}
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: lms
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: lms
+    volumes: [database:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U lms -d lms]
+      interval: 5s
+      retries: 12
+  storage:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_USER:?required}
+      MINIO_ROOT_PASSWORD: ${STORAGE_PASSWORD:?required}
+    volumes: [objects:/data]
+  bucket-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    depends_on: [storage]
+    environment:
+      STORAGE_USER: ${STORAGE_USER:?required}
+      STORAGE_PASSWORD: ${STORAGE_PASSWORD:?required}
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - >-
+        for attempt in 1 2 3 4 5 6 7 8 9 10; do
+        mc alias set local http://storage:9000 "$$STORAGE_USER" "$$STORAGE_PASSWORD" >/dev/null 2>&1 && break;
+        sleep 2; done;
+        mc mb --ignore-existing local/lms-private;
+        mc anonymous set none local/lms-private
+  migrate:
+    build: {context: .., target: build}
+    environment: *api-env
+    command: [node, node_modules/tsx/dist/cli.mjs, scripts/migrate.ts]
+    depends_on:
+      postgres: {condition: service_healthy}
+  api:
+    build: {context: .., target: runtime}
+    environment: *api-env
+    restart: unless-stopped
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      bucket-init: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      retries: 12
+  web:
+    build: {context: ../../lms-frontend}
+    ports: [127.0.0.1:18080:80]
+    restart: unless-stopped
+    depends_on:
+      api: {condition: service_healthy}
+volumes:
+  database:
+  objects:

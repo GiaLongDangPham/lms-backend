@@ -65,3 +65,11 @@ body/query/cursor sai, UTF-8, phân trang, dữ liệu persistence và comment s
 `npm run check`, `npm run api:test`, `npm run db:test`, `npm run api:validate` đạt.
 Phân biệt local verified với CI, Nam review, staging và F6 acceptance; không tự đánh dấu
 Done nếu chưa có bằng chứng các bước ngoài local.
+
+## I2b reconciliation 21/11/2026
+
+B6 PR #14 merged 14/11. TestCase Kha approved 19/11 scopes F6 to common assignment
+comments (TC-CM-01..07); this is the acceptance surface for I2b. Backend private
+submission endpoints retain owner/teacher privacy, now described explicitly in OpenAPI.
+Outdated pending tags are removed; historical notes above are not current deployment status.
+Local API/UI verification does not claim remote staging deployment.
