@@ -65,6 +65,13 @@ describe('D2 OpenAPI contract', () => {
     expect(correctUnsubmitted({ score: 8, feedback: 'x'.repeat(5001) })).toBe(false);
     expect(correctUnsubmitted({ score: 8, unexpected: true })).toBe(false);
   });
+  it('documents student assignment capability without requiring a submission resource', () => {
+    const spec = JSON.parse(readFileSync('docs/openapi.json', 'utf8'));
+    const properties = spec.components.schemas.Assignment.properties;
+    expect(properties.canSubmit).toMatchObject({ type: 'boolean' });
+    expect(properties.lockedReason.enum).toEqual(['GRADED', 'DEADLINE_PASSED', null]);
+    expect(properties.mySubmissionStatus.description).toContain('AUTO_ZERO_NO_SUBMISSION');
+  });
   it('keeps Draft-only fields out of student grade/history and publication blockers', () => {
     const spec = JSON.parse(readFileSync('docs/openapi.json', 'utf8'));
     const ajv = new Ajv2020({ strict: false, allErrors: true });

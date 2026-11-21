@@ -88,7 +88,11 @@ describe.skipIf(!target)('B1/B3 client rules and assignments/submissions',()=>{
   });
   it('allows a late first submission, locks another version, and reopens after deadline extension',async()=>{
     const a=await assignment();await pool.query("UPDATE assignments SET deadline_at=now()-interval '1 hour' WHERE id=$1",[a]);
+    const before=await api.get(`/api/assignments/${a}`).auth(student,{type:'bearer'});
+    expect(before.body).toMatchObject({mySubmissionStatus:'NOT_SUBMITTED',canSubmit:true,lockedReason:null});
     const first=await submit(a);expect(first.status).toBe(201);expect(first.body.versions[0].isLate).toBe(true);
+    const after=await api.get(`/api/assignments/${a}`).auth(student,{type:'bearer'});
+    expect(after.body).toMatchObject({mySubmissionStatus:'LATE',canSubmit:false,lockedReason:'DEADLINE_PASSED'});
     const blocked=await submit(a);expect(blocked.status).toBe(409);
     expect(blocked.body.error.code).toBe('DEADLINE_LOCKS_RESUBMISSION');
     const extended=await api.patch(`/api/assignments/${a}`).auth(teacher,{type:'bearer'})
@@ -174,6 +178,10 @@ describe.skipIf(!target)('B1/B3 client rules and assignments/submissions',()=>{
     const result=await api.get(`/api/assignments/${a}/my-result`).auth(student2,{type:'bearer'});
     expect(result.status).toBe(200);expect(result.body).toMatchObject({score:0,source:'AUTO_ZERO_NO_SUBMISSION',submissionId:null,gradedVersionNumber:null});
     contract('/assignments/{assignmentId}/my-result','get',200,result.body);
+    const assignmentState=await api.get(`/api/assignments/${a}`).auth(student2,{type:'bearer'});
+    expect(assignmentState.body).toMatchObject({
+      mySubmissionStatus:'GRADED',canSubmit:false,lockedReason:'GRADED',
+    });
     const teacherView=await api.get(`/api/assignments/${a}/submissions`).auth(teacher,{type:'bearer'});
     expect(teacherView.status).toBe(200);contract('/assignments/{assignmentId}/submissions','get',200,teacherView.body);
     const before=await pool.query('SELECT count(*)::int AS n FROM notifications WHERE assignment_id=$1',[a]);

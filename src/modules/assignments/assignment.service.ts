@@ -16,6 +16,25 @@ export interface AssignmentUpdate {
   title?: string; description?: string | null; deadlineAt?: Date; maxScore?: number; fileIds?: string[];
 }
 
+export interface StudentAssignmentState {
+  submitted_at: Date | null;
+  deadline_at_submission: Date | null;
+  graded: boolean;
+  deadline_locked: boolean;
+}
+
+export function studentAssignmentCapability(state: StudentAssignmentState | undefined,
+  resultsPublished: boolean) {
+  const submissionLocked = Boolean(state?.graded || resultsPublished);
+  const status = state?.graded ? 'GRADED' : !state?.submitted_at ? 'NOT_SUBMITTED'
+    : isAfterDeadline(state.submitted_at,state.deadline_at_submission!) ? 'LATE' : 'SUBMITTED';
+  return {
+    mySubmissionStatus: status,
+    canSubmit: !submissionLocked && !state?.deadline_locked,
+    lockedReason: submissionLocked ? 'GRADED' : state?.deadline_locked ? 'DEADLINE_PASSED' : null,
+  };
+}
+
 export class AssignmentService {
   constructor(private readonly repository: AssignmentRepository,
     private readonly notifications: NotificationPublisher) {}
@@ -62,8 +81,7 @@ export class AssignmentService {
       dto.submittedCount = counts.submitted_count; dto.studentCount = counts.student_count;
     } else if (principal.user.role === 'STUDENT') {
       const state = await this.repository.studentAssignmentState(db, row.id, principal.user.id, row.class_id);
-      dto.mySubmissionStatus = !state?.submitted_at ? 'NOT_SUBMITTED' : state.graded ? 'GRADED'
-        : state.submitted_at > state.deadline_at_submission! ? 'LATE' : 'SUBMITTED';
+      Object.assign(dto,studentAssignmentCapability(state,Boolean(row.results_published_at)));
     }
     return dto;
   }

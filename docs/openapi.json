@@ -3424,7 +3424,25 @@
               null
             ],
             "example": "SUBMITTED",
-            "description": "Present for students in assignment list responses; GRADED does not expose Draft score"
+            "description": "Present for students; GRADED includes AUTO_ZERO_NO_SUBMISSION and does not expose Draft score"
+          },
+          "canSubmit": {
+            "type": "boolean",
+            "example": false,
+            "description": "Present for students. False when a grade/publication or an expired resubmission window locks submission. A first submission may still be late."
+          },
+          "lockedReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "GRADED",
+              "DEADLINE_PASSED",
+              null
+            ],
+            "example": "GRADED",
+            "description": "Present for students and explains canSubmit=false without requiring a Submission resource"
           },
           "createdAt": {
             "$ref": "#/components/schemas/Timestamp"
