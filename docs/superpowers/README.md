@@ -12,6 +12,8 @@ B3/B4 của thành viên khác giữ nguyên tên, vị trí và nội dung.
 | B5 · Notifications | [Thiết kế B5](specs/2026-11-13-b5-notifications-design.md) | [Kế hoạch B5](plans/2026-11-13-b5-notifications.md) | Inbox, publisher và reminder 24 giờ đã hiện thực |
 | B6 · Comment | [B6-comment](specs/B6-comment.md) | [B6-comment](plans/B6-comment.md) | API + test local; cần Nam review, CI và staging/F6 |
 
+| I2a · Tích hợp Thông báo | [Spec](specs/I2a-thong-bao.md) | [Plan/evidence](plans/I2a-thong-bao.md) | Local API/UI đạt; chưa deploy |
+
 ## Cách đọc và cập nhật
 
 - Đặt tên ngắn theo `<mã task>-<tên>.md`, ví dụ `S1-moi-truong.md`,

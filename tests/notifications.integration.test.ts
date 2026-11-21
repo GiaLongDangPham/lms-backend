@@ -149,7 +149,7 @@ describe.skipIf(!target)('B5 student notifications', () => {
 
   it('atomically snapshots one assignment-created event for each active student', async () => {
     const created = await api.post(`/api/classes/${id.classA}/assignments`).auth(teacher,{type:'bearer'}).send({
-      title:'Bài tập thông báo',deadlineAt:'2026-11-20T10:00:00Z',maxScore:10,
+      title:'Bài tập thông báo',deadlineAt:'2030-11-20T10:00:00Z',maxScore:10,
     });
     expect(created.status).toBe(201);
 
@@ -157,9 +157,9 @@ describe.skipIf(!target)('B5 student notifications', () => {
       recipient_id,title,body,deduplication_key FROM notifications
       WHERE assignment_id=$1 AND kind='ASSIGNMENT_CREATED' ORDER BY recipient_id`,[created.body.id]);
     expect(rows.rows).toEqual([
-      { recipient_id:id.student1,title:'Bài tập mới',body:'Bài tập "Bài tập thông báo" đã được giao.',
+      { recipient_id:id.student1,title:'Bài tập mới',body:'Bài tập "Bài tập thông báo" · Lớp Demo A. Hạn nộp: 20/11/2030 17:00 (giờ Việt Nam).',
         deduplication_key:`assignment-created:${created.body.id}` },
-      { recipient_id:id.student2,title:'Bài tập mới',body:'Bài tập "Bài tập thông báo" đã được giao.',
+      { recipient_id:id.student2,title:'Bài tập mới',body:'Bài tập "Bài tập thông báo" · Lớp Demo A. Hạn nộp: 20/11/2030 17:00 (giờ Việt Nam).',
         deduplication_key:`assignment-created:${created.body.id}` },
     ]);
 
