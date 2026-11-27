@@ -29,7 +29,14 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - name: Generate an ephemeral JWT key for CI
+        run: echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
       - run: npm run check
+      - run: node scripts/mock-api.mjs --validate
+      - run: node scripts/mock-api.mjs --self-test
+      - run: npm run db:migrate
+      - run: npm run db:test
+      - run: npm run api:test
       - run: npm run db:check
       - name: Smoke test compiled API against PostgreSQL
         shell: bash

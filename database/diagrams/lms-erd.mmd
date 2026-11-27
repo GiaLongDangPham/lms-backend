@@ -1,0 +1,184 @@
+%% LMS - migrations 0001-0005; Client Log 18-20, L04/L05/L14/L20; 2026-10-24
+%% Main fields only; audit fields and constraints are documented in SQL.
+%% results_published_by and results_published_at are paired, write-once DB provenance; no public API field.
+erDiagram
+    USERS {
+        uuid id PK
+        text school_code UK
+        text full_name
+        text email "NULL; contact only"
+        text password_hash
+        text role
+        boolean is_active
+        boolean must_change_password
+    }
+    CLASSES {
+        uuid id PK
+        text code
+        text course_code "UK with code and term"
+        text name
+        text term
+        text description "NULL"
+        uuid created_by FK
+    }
+    CLASS_TEACHERS {
+        uuid class_id PK, FK
+        uuid teacher_id PK, FK
+        uuid assigned_by FK
+    }
+    ENROLLMENTS {
+        uuid id PK
+        uuid class_id FK
+        uuid student_id FK
+        uuid enrolled_by FK
+        boolean is_active
+    }
+    MATERIALS {
+        uuid id PK
+        uuid class_id FK
+        uuid created_by FK
+        text title
+        text description
+    }
+    ASSIGNMENTS {
+        uuid id PK
+        uuid class_id FK
+        uuid created_by FK
+        text title
+        timestamptz deadline_at
+        numeric max_score
+        timestamptz results_published_at "NULL until assignment-wide publication"
+        uuid results_published_by FK "NULL until assignment-wide publication; DB only"
+    }
+    SUBMISSIONS {
+        uuid id PK
+        uuid assignment_id FK
+        uuid enrollment_id FK
+        timestamptz created_at
+    }
+    SUBMISSION_VERSIONS {
+        uuid submission_id PK, FK
+        integer version_number PK
+        timestamptz submitted_at
+        timestamptz deadline_at_submission
+        text note "NULL; private; max 2000"
+    }
+    GRADES {
+        uuid id PK
+        uuid assignment_id FK "UK with enrollment_id"
+        uuid enrollment_id FK
+        uuid submission_id FK, UK "NULL when no submission"
+        integer graded_version_number FK "NULL when no submission"
+        numeric score
+        text feedback
+        text status
+        text source "MANUAL or AUTO_ZERO_NO_SUBMISSION"
+        integer revision
+        uuid graded_by FK
+        uuid published_by FK
+        timestamptz published_at
+    }
+    GRADE_HISTORY {
+        uuid grade_id PK, FK
+        integer version PK
+        numeric score
+        text feedback
+        text status
+        text source
+        uuid submission_id FK "NULL allowed"
+        integer graded_version_number FK "NULL allowed"
+        uuid changed_by FK
+        timestamptz changed_at
+    }
+    AUTH_SESSIONS {
+        uuid id PK
+        uuid user_id FK
+        timestamptz created_at
+        timestamptz expires_at
+        timestamptz revoked_at "NULL until revoked"
+    }
+    AUTH_REFRESH_TOKENS {
+        text token_hash PK "SHA256; never raw token"
+        uuid session_id FK
+        timestamptz created_at
+        timestamptz used_at "NULL until rotated"
+    }
+    FILES {
+        uuid id PK
+        text storage_provider
+        text storage_container
+        text object_key
+        text original_name
+        text mime_type
+        bigint size_bytes
+        uuid uploaded_by FK
+    }
+    MATERIAL_FILES {
+        uuid material_id PK, FK
+        uuid file_id PK, FK
+    }
+    ASSIGNMENT_FILES {
+        uuid assignment_id PK, FK
+        uuid file_id PK, FK
+    }
+    SUBMISSION_FILES {
+        uuid submission_id PK, FK
+        integer version_number PK, FK
+        uuid file_id PK, FK
+    }
+    NOTIFICATIONS {
+        uuid id PK
+        uuid recipient_id FK
+        uuid assignment_id FK
+        text kind
+        text title
+        text body
+        text deduplication_key
+        timestamptz read_at
+    }
+    COMMENTS {
+        uuid id PK
+        uuid author_id FK
+        uuid assignment_id FK
+        uuid submission_id FK
+        text body
+    }
+
+    USERS ||..o{ CLASSES : creates
+    USERS ||--o{ CLASS_TEACHERS : teaches
+    USERS ||..o{ CLASS_TEACHERS : assigns
+    CLASSES ||--o{ CLASS_TEACHERS : has_teachers
+    USERS ||..o{ ENROLLMENTS : enrolls_as_student
+    USERS ||..o{ ENROLLMENTS : records_enrollment
+    CLASSES ||..o{ ENROLLMENTS : has_students
+    CLASSES ||..o{ MATERIALS : contains
+    USERS ||..o{ MATERIALS : authors
+    CLASSES ||..o{ ASSIGNMENTS : contains
+    USERS ||..o{ ASSIGNMENTS : authors
+    USERS |o..o{ ASSIGNMENTS : publishes_results
+    ASSIGNMENTS ||..o{ SUBMISSIONS : receives
+    ENROLLMENTS ||..o{ SUBMISSIONS : owns
+    SUBMISSIONS ||--o{ SUBMISSION_VERSIONS : retains_history
+    ASSIGNMENTS ||..o{ GRADES : has_results
+    ENROLLMENTS ||..o{ GRADES : owns_results
+    SUBMISSIONS |o..o| GRADES : optional_submission
+    SUBMISSION_VERSIONS |o..o| GRADES : optional_graded_version
+    GRADES ||--|{ GRADE_HISTORY : immutable_snapshots
+    SUBMISSION_VERSIONS |o..o{ GRADE_HISTORY : preserves_graded_version
+    USERS ||..o{ GRADE_HISTORY : changes
+    USERS ||..o{ AUTH_SESSIONS : signs_in
+    AUTH_SESSIONS ||..o{ AUTH_REFRESH_TOKENS : rotates
+    USERS ||..o{ GRADES : grades
+    USERS |o..o{ GRADES : publishes
+    USERS ||..o{ FILES : uploads
+    MATERIALS ||--o{ MATERIAL_FILES : attaches
+    FILES ||--o{ MATERIAL_FILES : referenced_by
+    ASSIGNMENTS ||--o{ ASSIGNMENT_FILES : attaches
+    FILES ||--o{ ASSIGNMENT_FILES : referenced_by
+    SUBMISSION_VERSIONS ||--o{ SUBMISSION_FILES : attaches
+    FILES ||--o{ SUBMISSION_FILES : referenced_by
+    USERS ||..o{ NOTIFICATIONS : receives
+    ASSIGNMENTS |o..o{ NOTIFICATIONS : relates_to
+    USERS ||..o{ COMMENTS : writes
+    ASSIGNMENTS |o..o{ COMMENTS : discussed_in
+    SUBMISSIONS |o..o{ COMMENTS : discussed_in
